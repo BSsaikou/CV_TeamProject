@@ -9,7 +9,7 @@ import json
 import re
 import time
 from pathlib import Path
-from CV_TeamProject.data import get_data_path
+from data import get_data_path
 import cv2
 import numpy as np
 

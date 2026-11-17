@@ -221,3 +221,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ===== Project: data / results / weights =====
+# 데이터셋 원본 (kagglehub 또는 수동 다운로드)
+kaggle_3m/
+data/
+# 실행 결과물
+results/
+baseline_results/
+# 모델 가중치
+*.pth
+*.pt
