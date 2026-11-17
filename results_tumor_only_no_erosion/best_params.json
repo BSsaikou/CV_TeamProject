@@ -1,0 +1,7 @@
+{
+  "threshold_method": "otsu",
+  "percentile": 95,
+  "kernel_size": 5,
+  "min_area": 50,
+  "erosion_kernel_size": 0
+}

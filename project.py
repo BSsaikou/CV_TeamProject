@@ -84,16 +84,13 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     if not np.any(roi):
         return np.zeros_like(gray, dtype=np.uint8)
     # ROI 경계 부분을 안쪽으로 줄이기
-    kernel_roi = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE,
-        (erosion_kernel_size, erosion_kernel_size)
-    )
-
-    roi = cv2.erode(
-        roi,
-        kernel_roi,
-        iterations=1
-    )
+    # 0은 ROI 침식을 생략하는 비교 실험용 설정이다.
+    if erosion_kernel_size != 0:
+        kernel_roi = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE,
+            (erosion_kernel_size, erosion_kernel_size)
+        )
+        roi = cv2.erode(roi, kernel_roi, iterations=1)
     # 3. 뇌 관심 영역(ROI)에 속한 픽셀만 사용해 히스토그램 기반 밝기 임계값을 계산한다.
     intensities = smooth[roi > 0]
     if intensities.size == 0:
@@ -204,7 +201,19 @@ def evaluate(pairs, params, save_dir=None, max_examples=8):
             overlay[(pred == 0) & (gt == 1)] = (255, 0, 0)
             panel = np.hstack((bgr, cv2.cvtColor(gt * 255, cv2.COLOR_GRAY2BGR),
                                cv2.cvtColor(pred * 255, cv2.COLOR_GRAY2BGR), overlay))
-            cv2.imwrite(str(save_dir / f'{index:03d}_{image_path.stem}.png'), panel)
+            # 영상 영역을 가리지 않도록 별도 상단 여백에 파일명과 패널 이름을 표시한다.
+            header = np.full((48, panel.shape[1], 3), 25, dtype=np.uint8)
+            cv2.putText(header, image_path.name, (8, 17), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4, (220, 220, 220), 1, cv2.LINE_AA)
+            for column, title in enumerate(('Original', 'Ground truth', 'Prediction', 'Overlay')):
+                cv2.putText(header, title, (column * bgr.shape[1] + 8, 39),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+            panel = np.vstack((header, panel))
+            output_path = save_dir / f'{index:03d}_{image_path.stem}.png'
+            ok, encoded = cv2.imencode('.png', panel)
+            if not ok:
+                raise ValueError(f'Failed encoding {output_path}')
+            encoded.tofile(output_path)
     return rows
 
 
@@ -218,6 +227,10 @@ def main():
     parser.add_argument('--data', type=Path, default=None, help='Root of LGG MRI dataset')
     parser.add_argument('--out', type=Path, default=Path('baseline_results'))
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--tumor-only', action='store_true',
+                        help='Evaluate and tune only slices with nonempty ground-truth masks')
+    parser.add_argument('--no-erosion', action='store_true',
+                        help='Skip ROI erosion and tune the other parameters only')
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -229,6 +242,14 @@ def main():
         data_path = get_data_path()
 
     splits = split_patients(find_pairs(data_path), seed=args.seed)
+    original_counts = {name: len(pairs) for name, pairs in splits.items()}
+    if args.tumor_only:
+        # 환자 분할 이후 필터링하여 기존 환자 배정과 데이터 누수 방지를 유지한다.
+        for name in ('val', 'test'):
+            splits[name] = [pair for pair in splits[name] if np.any(read_pair(pair[0], pair[1])[2])]
+            if not splits[name]:
+                raise ValueError(f'No tumor-positive slices in {name} split')
+            print(f'{name}: retained {len(splits[name])}/{original_counts[name]} tumor-positive slices')
     # json 형식으로 저장한다.
     split_manifest = {name: [{'image': str(im), 'mask': str(mask), 'patient': patient}
                               for im, mask, patient in pairs] for name, pairs in splits.items()}
@@ -242,7 +263,7 @@ def main():
         for percentile in percentiles:
             for kernel_size in [3, 5]:
                 for min_area in [15, 50]:
-                    for erosion_kernel_size in [9, 15, 21]:
+                    for erosion_kernel_size in ([0] if args.no_erosion else [9, 15, 21]):
                         candidates.append({'threshold_method': method, 'percentile': percentile,
                                            'kernel_size': kernel_size, 'min_area': min_area,
                                            'erosion_kernel_size': erosion_kernel_size})
@@ -270,6 +291,9 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     report = {'method': 'histogram threshold + morphology', 'params': best_params,
+              'evaluation_scope': 'tumor-positive slices only' if args.tumor_only else 'all slices',
+              'seed': args.seed, 'original_split_counts': original_counts,
+              'validation_slices': len(splits['val']), 'best_validation_dice': best_score,
               'test_slices': len(rows), 'test_patients': len(set(row['patient'] for row in rows)),
               'dice_mean': avg(rows, 'dice'), 'iou_mean': avg(rows, 'iou'),
               'time_ms_mean': avg(rows, 'ms')}
