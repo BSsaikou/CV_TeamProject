@@ -9,7 +9,7 @@ import json
 import re
 import time
 from pathlib import Path
-from CV_TeamProject.data import get_data_path
+from data import get_data_path
 import cv2
 import numpy as np
 
@@ -69,7 +69,7 @@ def largest_component(mask):
     return (labels == idx).astype(np.uint8)
 
 
-def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_area=15):
+def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_area=15, debug_dir=None):
     """추정한 뇌 관심 영역(ROI) 안에서 히스토그램 임계값을 적용한 뒤 모폴로지로 보정한다.
 
     주의: 영상에서 추정한 ROI는 근사치이며, 해부학적으로 정확한 뇌 마스크는 아니다.
@@ -83,7 +83,17 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     roi = largest_component(roi)
     if not np.any(roi):
         return np.zeros_like(gray, dtype=np.uint8)
+    # ROI 경계 부분을 안쪽으로 줄이기
+    kernel_roi = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (15, 15)
+    )
 
+    roi = cv2.erode(
+        roi,
+        kernel_roi,
+        iterations=1
+    )
     # 3. 뇌 관심 영역(ROI)에 속한 픽셀만 사용해 히스토그램 기반 밝기 임계값을 계산한다.
     intensities = smooth[roi > 0]
     if threshold_method == 'otsu':
@@ -96,11 +106,15 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
         raise ValueError(f'Unsupported method: {threshold_method}')
 
     mask = ((smooth > threshold) & (roi > 0)).astype(np.uint8)
+    
+    threshold_mask = mask.copy()
 
     # 4. 모폴로지 열림/닫힘 연산으로 고립된 잡음을 제거하고 작은 틈을 메운다.
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    opening_mask = mask.copy()
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    closing_mask = mask.copy()
 
     # 5. 작은 연결 요소만 제거하고, 여러 개의 종양 후보 영역은 유지한다.
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
@@ -108,6 +122,51 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     for label in range(1, n):
         if stats[label, cv2.CC_STAT_AREA] >= min_area:
             cleaned[labels == label] = 1
+
+    # 6. 중간 마스크 결과 저장
+    if debug_dir is not None:
+
+        debug_dir = Path(debug_dir)
+        debug_dir.mkdir(parents=True, exist_ok=True)
+
+        images = {
+            "01_roi": roi,
+            "02_threshold": threshold_mask,
+            "03_opening": opening_mask,
+            "04_closing": closing_mask,
+            "05_connected": cleaned
+        }
+
+        # 각 중간 마스크 저장
+        for name, img in images.items():
+            cv2.imwrite(
+                str(debug_dir / f"{name}.png"),
+                img * 255
+            )
+
+        # 전체 과정 비교 이미지 생성
+        panels = [
+            gray,
+            roi * 255,
+            threshold_mask * 255,
+            opening_mask * 255,
+            closing_mask * 255,
+            cleaned * 255
+        ]
+
+        comparison = np.hstack(panels)
+
+        cv2.imwrite(
+            str(debug_dir / "06_comparison.png"),
+            comparison
+        )
+
+        print(f"임계값: {threshold:.2f}")
+        print(f"임계값 직후 픽셀 수: {np.count_nonzero(threshold_mask)}")
+        print(f"Opening 후 픽셀 수: {np.count_nonzero(opening_mask)}")
+        print(f"Closing 후 픽셀 수: {np.count_nonzero(closing_mask)}")
+        print(f"연결 요소 분석 후 픽셀 수: {np.count_nonzero(cleaned)}")
+
     return cleaned
 
 
