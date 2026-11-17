@@ -9,7 +9,6 @@ import json
 import re
 import time
 from pathlib import Path
-from data import get_data_path
 import cv2
 import numpy as np
 
@@ -69,7 +68,8 @@ def largest_component(mask):
     return (labels == idx).astype(np.uint8)
 
 
-def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_area=15, debug_dir=None):
+def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_area=15, debug_dir=None,
+            erosion_kernel_size=7):
     """추정한 뇌 관심 영역(ROI) 안에서 히스토그램 임계값을 적용한 뒤 모폴로지로 보정한다.
 
     주의: 영상에서 추정한 ROI는 근사치이며, 해부학적으로 정확한 뇌 마스크는 아니다.
@@ -86,7 +86,7 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     # ROI 경계 부분을 안쪽으로 줄이기
     kernel_roi = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE,
-        (15, 15)
+        (erosion_kernel_size, erosion_kernel_size)
     )
 
     roi = cv2.erode(
@@ -96,6 +96,8 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     )
     # 3. 뇌 관심 영역(ROI)에 속한 픽셀만 사용해 히스토그램 기반 밝기 임계값을 계산한다.
     intensities = smooth[roi > 0]
+    if intensities.size == 0:
+        return np.zeros_like(gray, dtype=np.uint8)
     if threshold_method == 'otsu':
         # ROI의 밝기 값에 Otsu를 적용하기 위해 1열짜리 흑백 영상 형태로 변환한다.
         threshold, _ = cv2.threshold(intensities.reshape(-1, 1), 0, 255,
@@ -220,7 +222,11 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
 
     # 데이터셋 경로를 자동으로 가져오기
-    data_path = args.data if args.data is not None else get_data_path()
+    if args.data is not None:
+        data_path = args.data
+    else:
+        from data import get_data_path
+        data_path = get_data_path()
 
     splits = split_patients(find_pairs(data_path), seed=args.seed)
     # json 형식으로 저장한다.
@@ -236,15 +242,18 @@ def main():
         for percentile in percentiles:
             for kernel_size in [3, 5]:
                 for min_area in [15, 50]:
-                    candidates.append({'threshold_method': method, 'percentile': percentile,
-                                       'kernel_size': kernel_size, 'min_area': min_area})
+                    for erosion_kernel_size in [9, 15, 21]:
+                        candidates.append({'threshold_method': method, 'percentile': percentile,
+                                           'kernel_size': kernel_size, 'min_area': min_area,
+                                           'erosion_kernel_size': erosion_kernel_size})
     best_params = None
     best_score = -1.0
     tuning = []
     # 최적의 파라미터를 검증을 통해 선택한다.
-    for params in candidates:
+    for index, params in enumerate(candidates, start=1):
         rows = evaluate(splits['val'], params)
         score = avg(rows, 'dice')
+        print(f'[{index}/{len(candidates)}] val Dice: {score:.4f}; params: {params}', flush=True)
         tuning.append({'params': params, 'val_dice': score, 'val_iou': avg(rows, 'iou')})
         if score > best_score:
             best_score, best_params = score, params
