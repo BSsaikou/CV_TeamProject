@@ -221,3 +221,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ===== Project: dataset / weights =====
+kaggle_3m/
+*.pth
+*.pt
+preprocess_check.png
+eda/
