@@ -6,7 +6,6 @@ https://app.notion.com/p/41b9e7d5dcd880dbbf8beb0c273160ed?source=copy_link
 ## 설치
 ```bash
 pip install numpy opencv-python
-// 데이터셋 설치
 python -m pip install kagglehub
 ```
 
