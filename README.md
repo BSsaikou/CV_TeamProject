@@ -24,6 +24,15 @@ kaggle_3m/
 python project.py --out ./results
 ```
 
+종양이 있는 슬라이스만 검증·테스트하려면:
+```bash
+python project.py --tumor-only --out ./results_tumor_only
+```
+환자 단위 분할 후 정답 마스크가 비어 있지 않은 검증·테스트 슬라이스만 사용합니다.
+학습 세트는 유지하며, `split.json`에는 실제 사용한 목록을 저장합니다.
+침식 커널 9/15/21을 포함한 60개 조합을 검증 Dice로 선택합니다.
+이 평가는 종양이 있는 영상의 분할 성능이며, 종양이 없는 영상의 오검출 성능은 포함하지 않습니다.
+
 ## 결과
 - `split.json`: 환자 단위 70/15/15 데이터 분할 목록. 딥러닝 두 모델도 **이 파일을 재사용**하세요.
 - `validation_tuning.json`: 검증 세트에서만 파라미터 탐색한 결과
