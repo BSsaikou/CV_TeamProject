@@ -9,7 +9,6 @@ import json
 import re
 import time
 from pathlib import Path
-from data import get_data_path
 import cv2
 import numpy as np
 
@@ -69,7 +68,8 @@ def largest_component(mask):
     return (labels == idx).astype(np.uint8)
 
 
-def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_area=15):
+def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_area=15, debug_dir=None,
+            erosion_kernel_size=7):
     """추정한 뇌 관심 영역(ROI) 안에서 히스토그램 임계값을 적용한 뒤 모폴로지로 보정한다.
 
     주의: 영상에서 추정한 ROI는 근사치이며, 해부학적으로 정확한 뇌 마스크는 아니다.
@@ -83,9 +83,18 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     roi = largest_component(roi)
     if not np.any(roi):
         return np.zeros_like(gray, dtype=np.uint8)
-
+    # ROI 경계 부분을 안쪽으로 줄이기
+    # 0은 ROI 침식을 생략하는 비교 실험용 설정이다.
+    if erosion_kernel_size != 0:
+        kernel_roi = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE,
+            (erosion_kernel_size, erosion_kernel_size)
+        )
+        roi = cv2.erode(roi, kernel_roi, iterations=1)
     # 3. 뇌 관심 영역(ROI)에 속한 픽셀만 사용해 히스토그램 기반 밝기 임계값을 계산한다.
     intensities = smooth[roi > 0]
+    if intensities.size == 0:
+        return np.zeros_like(gray, dtype=np.uint8)
     if threshold_method == 'otsu':
         # ROI의 밝기 값에 Otsu를 적용하기 위해 1열짜리 흑백 영상 형태로 변환한다.
         threshold, _ = cv2.threshold(intensities.reshape(-1, 1), 0, 255,
@@ -96,11 +105,15 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
         raise ValueError(f'Unsupported method: {threshold_method}')
 
     mask = ((smooth > threshold) & (roi > 0)).astype(np.uint8)
+    
+    threshold_mask = mask.copy()
 
     # 4. 모폴로지 열림/닫힘 연산으로 고립된 잡음을 제거하고 작은 틈을 메운다.
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    opening_mask = mask.copy()
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    closing_mask = mask.copy()
 
     # 5. 작은 연결 요소만 제거하고, 여러 개의 종양 후보 영역은 유지한다.
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
@@ -108,6 +121,51 @@ def segment(gray, threshold_method='otsu', percentile=95, kernel_size=3, min_are
     for label in range(1, n):
         if stats[label, cv2.CC_STAT_AREA] >= min_area:
             cleaned[labels == label] = 1
+
+    # 6. 중간 마스크 결과 저장
+    if debug_dir is not None:
+
+        debug_dir = Path(debug_dir)
+        debug_dir.mkdir(parents=True, exist_ok=True)
+
+        images = {
+            "01_roi": roi,
+            "02_threshold": threshold_mask,
+            "03_opening": opening_mask,
+            "04_closing": closing_mask,
+            "05_connected": cleaned
+        }
+
+        # 각 중간 마스크 저장
+        for name, img in images.items():
+            cv2.imwrite(
+                str(debug_dir / f"{name}.png"),
+                img * 255
+            )
+
+        # 전체 과정 비교 이미지 생성
+        panels = [
+            gray,
+            roi * 255,
+            threshold_mask * 255,
+            opening_mask * 255,
+            closing_mask * 255,
+            cleaned * 255
+        ]
+
+        comparison = np.hstack(panels)
+
+        cv2.imwrite(
+            str(debug_dir / "06_comparison.png"),
+            comparison
+        )
+
+        print(f"임계값: {threshold:.2f}")
+        print(f"임계값 직후 픽셀 수: {np.count_nonzero(threshold_mask)}")
+        print(f"Opening 후 픽셀 수: {np.count_nonzero(opening_mask)}")
+        print(f"Closing 후 픽셀 수: {np.count_nonzero(closing_mask)}")
+        print(f"연결 요소 분석 후 픽셀 수: {np.count_nonzero(cleaned)}")
+
     return cleaned
 
 
@@ -143,7 +201,19 @@ def evaluate(pairs, params, save_dir=None, max_examples=8):
             overlay[(pred == 0) & (gt == 1)] = (255, 0, 0)
             panel = np.hstack((bgr, cv2.cvtColor(gt * 255, cv2.COLOR_GRAY2BGR),
                                cv2.cvtColor(pred * 255, cv2.COLOR_GRAY2BGR), overlay))
-            cv2.imwrite(str(save_dir / f'{index:03d}_{image_path.stem}.png'), panel)
+            # 영상 영역을 가리지 않도록 별도 상단 여백에 파일명과 패널 이름을 표시한다.
+            header = np.full((48, panel.shape[1], 3), 25, dtype=np.uint8)
+            cv2.putText(header, image_path.name, (8, 17), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4, (220, 220, 220), 1, cv2.LINE_AA)
+            for column, title in enumerate(('Original', 'Ground truth', 'Prediction', 'Overlay')):
+                cv2.putText(header, title, (column * bgr.shape[1] + 8, 39),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+            panel = np.vstack((header, panel))
+            output_path = save_dir / f'{index:03d}_{image_path.stem}.png'
+            ok, encoded = cv2.imencode('.png', panel)
+            if not ok:
+                raise ValueError(f'Failed encoding {output_path}')
+            encoded.tofile(output_path)
     return rows
 
 
@@ -157,13 +227,29 @@ def main():
     parser.add_argument('--data', type=Path, default=None, help='Root of LGG MRI dataset')
     parser.add_argument('--out', type=Path, default=Path('baseline_results'))
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--tumor-only', action='store_true',
+                        help='Evaluate and tune only slices with nonempty ground-truth masks')
+    parser.add_argument('--no-erosion', action='store_true',
+                        help='Skip ROI erosion and tune the other parameters only')
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
     # 데이터셋 경로를 자동으로 가져오기
-    data_path = args.data if args.data is not None else get_data_path()
+    if args.data is not None:
+        data_path = args.data
+    else:
+        from data import get_data_path
+        data_path = get_data_path()
 
     splits = split_patients(find_pairs(data_path), seed=args.seed)
+    original_counts = {name: len(pairs) for name, pairs in splits.items()}
+    if args.tumor_only:
+        # 환자 분할 이후 필터링하여 기존 환자 배정과 데이터 누수 방지를 유지한다.
+        for name in ('val', 'test'):
+            splits[name] = [pair for pair in splits[name] if np.any(read_pair(pair[0], pair[1])[2])]
+            if not splits[name]:
+                raise ValueError(f'No tumor-positive slices in {name} split')
+            print(f'{name}: retained {len(splits[name])}/{original_counts[name]} tumor-positive slices')
     # json 형식으로 저장한다.
     split_manifest = {name: [{'image': str(im), 'mask': str(mask), 'patient': patient}
                               for im, mask, patient in pairs] for name, pairs in splits.items()}
@@ -177,15 +263,18 @@ def main():
         for percentile in percentiles:
             for kernel_size in [3, 5]:
                 for min_area in [15, 50]:
-                    candidates.append({'threshold_method': method, 'percentile': percentile,
-                                       'kernel_size': kernel_size, 'min_area': min_area})
+                    for erosion_kernel_size in ([0] if args.no_erosion else [9, 15, 21]):
+                        candidates.append({'threshold_method': method, 'percentile': percentile,
+                                           'kernel_size': kernel_size, 'min_area': min_area,
+                                           'erosion_kernel_size': erosion_kernel_size})
     best_params = None
     best_score = -1.0
     tuning = []
     # 최적의 파라미터를 검증을 통해 선택한다.
-    for params in candidates:
+    for index, params in enumerate(candidates, start=1):
         rows = evaluate(splits['val'], params)
         score = avg(rows, 'dice')
+        print(f'[{index}/{len(candidates)}] val Dice: {score:.4f}; params: {params}', flush=True)
         tuning.append({'params': params, 'val_dice': score, 'val_iou': avg(rows, 'iou')})
         if score > best_score:
             best_score, best_params = score, params
@@ -202,6 +291,9 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     report = {'method': 'histogram threshold + morphology', 'params': best_params,
+              'evaluation_scope': 'tumor-positive slices only' if args.tumor_only else 'all slices',
+              'seed': args.seed, 'original_split_counts': original_counts,
+              'validation_slices': len(splits['val']), 'best_validation_dice': best_score,
               'test_slices': len(rows), 'test_patients': len(set(row['patient'] for row in rows)),
               'dice_mean': avg(rows, 'dice'), 'iou_mean': avg(rows, 'iou'),
               'time_ms_mean': avg(rows, 'ms')}
