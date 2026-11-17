@@ -1,6 +1,6 @@
 """환자 단위 학습/검증/테스트 분할을 만들어 splits/split.json으로 저장한다.
 
-- 분할 로직은 project.py의 split_patients()와 똑같다(seed 42, 70/15/15).
+- 공용 환자 분할을 생성한다(seed 42, 70/15/15). project.py와 Dataset이 이 결과를 읽는다.
   그래서 이미 고전 기법을 돌린 결과와 같은 환자 구성이 나온다.
 - 경로는 kaggle_3m 기준 '상대경로'로 저장해서 컴퓨터가 달라도 같은 파일을 쓸 수 있다.
 - 환자별 정규화 값(p1, p99)과 슬라이스별 종양 여부도 같이 저장한다.
@@ -17,11 +17,11 @@ from pathlib import Path
 
 import numpy as np
 
-from preprocess import brain_roi, read_flair, read_mask, roi_percentiles
+from preprocess import read_flair, read_mask, roi_percentiles
 
 
 # =====================================================================
-# 이미지/마스크 짝 찾기 (project.py의 find_pairs와 동일)
+# 이미지/마스크 짝 찾기
 # =====================================================================
 def find_pairs(root):
     pairs = []
@@ -38,7 +38,7 @@ def find_pairs(root):
 
 
 # =====================================================================
-# 환자 단위 분할 (project.py의 split_patients와 동일)
+# 환자 단위 공용 분할
 # =====================================================================
 def split_patients(pairs, seed=42):
     patients = sorted({p for _, _, p in pairs})

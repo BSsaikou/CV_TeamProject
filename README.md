@@ -61,7 +61,7 @@ python preprocess.py <이미지.tif> --erode 5   # 전처리 결과 한 장 확�
 | test | 17 | 600 | 215 (35.8%) |
 
 - 같은 환자의 슬라이스가 여러 세트에 섞이지 않도록 **환자 단위**로 나눴습니다.
-- `project.py`의 분할과 같은 로직이라 환자 구성이 동일합니다.
+- `project.py`와 딥러닝 Dataset이 이 공용 분할 파일을 읽습니다. 분할을 변경하려면 `split.py`로 새 파일을 만드세요.
 - 경로는 `kaggle_3m` 기준 상대경로로 저장되어 있어 컴퓨터가 달라도 그대로 쓸 수 있습니다.
 - 슬라이스별 종양 여부, 환자별 정규화 값(p1, p99)도 함께 저장되어 있습니다.
 
@@ -86,12 +86,12 @@ python project.py --out ./results
 python project.py --tumor-only --out ./results_tumor_only
 ```
 환자 단위 분할 후 정답 마스크가 비어 있지 않은 검증·테스트 슬라이스만 사용합니다.
-학습 세트는 유지하며, `split.json`에는 실제 사용한 목록을 저장합니다.
-침식 커널 9/15/21을 포함한 60개 조합을 검증 Dice로 선택합니다.
+학습 세트는 유지하며, `evaluation_manifest.json`에는 실제 사용한 목록을 저장합니다.
+침식 없음(0)과 커널 9/15/21을 포함한 80개 조합을 검증 Dice로 선택합니다.
 이 평가는 종양이 있는 영상의 분할 성능이며, 종양이 없는 영상의 오검출 성능은 포함하지 않습니다.
 
 ## 고전 기법 결과 파일
-- `split.json`: 해당 실행에서 사용한 분할 목록 (실행한 컴퓨터 기준 절대경로). 팀 공용 분할은 `splits/split.json`을 사용하세요.
+- `evaluation_manifest.json`: 공용 분할에서 이번 실행에 사용한 영상 목록. 입력 파일인 `splits/split.json`과 구분하여 저장합니다.
 - `validation_tuning.json`: 검증 세트에서만 파라미터 탐색한 결과
 - `best_params.json`: 검증 성능으로 정한 최종 설정
 - `test_metrics.csv`: 테스트 이미지별 Dice/IoU/추론시간(ms)
@@ -100,6 +100,25 @@ python project.py --tumor-only --out ./results_tumor_only
 
 ## 주의
 - 뇌 영역은 밝기 기반으로 대략 추정하므로 두개골/잡음 등으로 오검출될 수 있습니다. 검증 실패 사례를 보고 개선하세요.
-- 세 모델의 공정 비교를 위해 같은 분할(`splits/split.json`)과 같은 입력(FLAIR 채널, `preprocess.py`)을 사용합니다.
+- 고전 기법과 딥러닝은 FLAIR 채널과 환자별 정규화 값을 공유합니다. 고전 기법은 Otsu 입력을 위해 정규화 값을 8비트로 변환하고 공통 ROI를 사용합니다.
 - 데이터셋 원본, 모델 가중치(`*.pth`)는 커밋하지 않습니다.
 - 실제 의료 진단용이 아닙니다.
+
+## 공통 코드와 고전 기법의 경계
+- `split.py`: 환자 분할과 환자별 정규화 값을 계산하여 공용 JSON을 생성합니다.
+- `preprocess.py`: FLAIR·마스크 읽기, ROI 생성, 정규화를 담당합니다.
+- `project.py`: 공용 JSON을 읽고 공통 전처리 후 임계값·모폴로지 분할, 검증 탐색, 테스트 평가를 수행합니다.
+- `dataset.py`: 같은 공용 JSON과 전처리를 딥러닝 Dataset에 연결합니다.
+
+```bash
+python project.py --tumor-only --out results_flair_tumor_only
+python project.py --tumor-only --no-erosion --out results_flair_no_erosion
+```
+`--shared-preprocess`는 제거했습니다. 이제 항상 공통 전처리를 사용합니다.
+`project.py`의 `--seed`도 제거했으며 seed는 공용 JSON에서 읽습니다.
+다른 분할은 `--split-file`로 지정합니다. `--data`로 데이터 루트를 지정할 수 있습니다.
+기본 탐색은 80개 조합이며 `--no-erosion`을 지정하면 20개 조합입니다.
+ROI 침식 커널 21은 공통 함수의 `erode_px=10`으로 변환됩니다.
+`segment(flair, norm_low, norm_high, ...)`에는 원본 FLAIR와 환자별 정규화 범위를 전달합니다.
+`time_ms_mean`은 파일 읽기를 제외한 ROI 생성·정규화·분할 시간을 나타냅니다.
+기존 실험 폴더의 결과 파일은 과거 실행 기록으로 유지됩니다.
