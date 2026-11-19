@@ -1,0 +1,27 @@
+{
+  "method": "histogram threshold + morphology",
+  "params": {
+    "threshold_method": "percentile",
+    "percentile": 90,
+    "kernel_size": 5,
+    "min_area": 50,
+    "erosion_kernel_size": 21
+  },
+  "evaluation_scope": "tumor-positive slices only",
+  "preprocessing": "FLAIR + patient p1/p99 normalization (uint8) + shared ROI + erosion",
+  "seed": 42,
+  "split_file": "C:\\Users\\qjatn\\OneDrive\\\ubc14\ud0d5 \ud654\uba74\\test\\CV_TeamProject\\splits\\split.json",
+  "timing_scope": "ROI + normalization + segmentation (excludes image reading)",
+  "original_split_counts": {
+    "train": 2714,
+    "val": 615,
+    "test": 600
+  },
+  "validation_slices": 236,
+  "best_validation_dice": 0.5627372635489982,
+  "test_slices": 215,
+  "test_patients": 17,
+  "dice_mean": 0.4887375548907405,
+  "iou_mean": 0.3621773986896531,
+  "time_ms_mean": 1.973446511726442
+}

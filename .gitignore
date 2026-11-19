@@ -228,6 +228,6 @@ kaggle_3m/
 *.pt
 preprocess_check.png
 eda/
-/results/
-/results_*/
-/baseline_results/
+# /results/
+# /results_*/
+# /baseline_results/
