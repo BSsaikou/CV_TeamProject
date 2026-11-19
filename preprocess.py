@@ -1,6 +1,6 @@
 """LGG MRI 공통 전처리 함수 모음.
 
-고전 기법(project.py)과 딥러닝(dataset.py)이 모두 이 파일의 함수를 써서
+고전 기법(baseline_v2.py)과 딥러닝(dataset.py)이 모두 이 파일의 함수를 써서
 같은 입력(FLAIR 채널, 같은 정규화)으로 공정하게 비교하기 위한 모듈이다.
 
 - read_flair(): 3채널 tif에서 FLAIR(가운데 채널)만 읽기

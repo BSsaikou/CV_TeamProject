@@ -15,18 +15,22 @@ from preprocess import read_mask, read_flair, normalize, brain_roi
 
 
 def segment(flair, norm_low, norm_high, threshold_method='otsu', percentile=95,
-            kernel_size=3, min_area=15, erosion_kernel_size=0):
+            kernel_size=3, min_area=15, erosion_kernel_size=9):
     """공통 FLAIR 정규화·ROI를 사용한 임계값 및 모폴로지 분할."""
-    if erosion_kernel_size < 0 or (erosion_kernel_size > 0 and erosion_kernel_size % 2 == 0):
-        raise ValueError('Erosion kernel must be 0 or a positive odd integer')
-    roi = brain_roi(flair, erode_px=0 if erosion_kernel_size == 0 else (erosion_kernel_size - 1) // 2)
+    if erosion_kernel_size < 3 or erosion_kernel_size % 2 == 0:
+        raise ValueError('Erosion kernel must be an odd integer of at least 3')
+    roi = brain_roi(flair, erode_px=(erosion_kernel_size - 1) // 2)
     # Otsu는 8비트 입력을 사용하므로 공통 0~1 정규화 결과를 변환한다.
     gray = np.rint(normalize(flair, norm_low, norm_high) * 255).astype(np.uint8)
     smooth = cv2.medianBlur(gray, 3)
+    return segment_roi(smooth, roi, threshold_method, percentile, kernel_size, min_area)
+
+
+def segment_roi(smooth, roi, threshold_method, percentile, kernel_size, min_area):
     # 3. 뇌 관심 영역(ROI)에 속한 픽셀만 사용해 히스토그램 기반 밝기 임계값을 계산한다.
     intensities = smooth[roi > 0]
     if intensities.size == 0:
-        return np.zeros_like(gray, dtype=np.uint8)
+        return np.zeros_like(smooth, dtype=np.uint8)
     if threshold_method == 'otsu':
         # ROI의 밝기 값에 Otsu를 적용하기 위해 1열짜리 흑백 영상 형태로 변환한다.
         threshold, _ = cv2.threshold(intensities.reshape(-1, 1), 0, 255,
@@ -66,24 +70,29 @@ def metrics(pred, gt):
     return dice, iou
 
 
-def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8):
+def segment_flair(image, patient, params, shared_norm):
+    bounds = shared_norm[patient]
+    return segment(image, bounds['low'], bounds['high'], **params)
+
+
+def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
+             *, read_image=read_flair, predict=segment_flair):
     rows = []
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
     for index, (image_path, mask_path, patient) in enumerate(pairs):
-        flair = read_flair(image_path)
+        image = read_image(image_path)
         gt = read_mask(mask_path)
-        if flair.shape != gt.shape:
+        if image.shape != gt.shape:
             raise ValueError(f'Image/mask shape mismatch: {image_path}')
-        bounds = shared_norm[patient]
         start = time.perf_counter()
-        pred = segment(flair, bounds['low'], bounds['high'], **params)
+        pred = predict(image, patient, params, shared_norm)
         ms = (time.perf_counter() - start) * 1000
         dice, iou = metrics(pred, gt)
         rows.append({'image': str(image_path.name), 'patient': patient,
                      'dice': dice, 'iou': iou, 'ms': ms})
         if save_dir is not None and index < max_examples:
-            bgr = cv2.cvtColor(flair, cv2.COLOR_GRAY2BGR)
+            bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
             overlay = bgr.copy()
             # 초록색: 올바르게 검출한 영역, 빨간색: 잘못 검출한 영역, 파란색: 놓친 종양 영역.
             overlay[(pred == 1) & (gt == 1)] = (0, 255, 0)
@@ -111,16 +120,25 @@ def avg(rows, key):
     return float(np.mean([row[key] for row in rows])) if rows else None
 
 
-def main():
+def main(*, baseline=None):
     parser = argparse.ArgumentParser(description='MRI classical segmentation baseline')
     parser.add_argument('--data', type=Path, default=None, help='Root of LGG MRI dataset')
-    parser.add_argument('--out', type=Path, default=Path('baseline_results'))
+    parser.add_argument('--out', type=Path, help='Output directory')
     parser.add_argument('--tumor-only', action='store_true',
                         help='Evaluate and tune only slices with nonempty ground-truth masks')
-    parser.add_argument('--no-erosion', action='store_true',
-                        help='Skip ROI erosion and tune the other parameters only')
+    if baseline is not None:
+        parser.add_argument('--erosion', action='store_true',
+                            help='Apply ROI erosion and tune the kernel size (9, 15, or 21)')
     parser.add_argument('--split-file', type=Path, default=Path(__file__).parent / 'splits/split.json')
     args = parser.parse_args()
+    if baseline is None:
+        erosion_sizes = [9, 15, 21]
+        default_output = 'baseline_results'
+    else:
+        erosion_sizes = [9, 15, 21] if args.erosion else [0]
+        default_output = 'results_before_preprocess_erosion' if args.erosion else 'results_before_preprocess'
+    if args.out is None:
+        args.out = Path(default_output)
     args.out.mkdir(parents=True, exist_ok=True)
 
     # 데이터셋 경로를 자동으로 가져오기
@@ -131,14 +149,19 @@ def main():
         data_path = get_data_path()
 
     info = json.loads(args.split_file.read_text(encoding='utf-8'))
-    shared_norm = info['norm']
+    shared_norm = info['norm'] if baseline is None else None
+    evaluation_options = {} if baseline is None else {
+        'read_image': baseline[0], 'predict': baseline[1],
+    }
     splits = {name: [(data_path / r['image'], data_path / r['mask'], r['patient'])
                      for r in info['slices'] if r['split'] == name]
               for name in ('train', 'val', 'test')}
     patient_sets = [{p for _, _, p in splits[name]} for name in ('train', 'val', 'test')]
     if any(patient_sets[i] & patient_sets[j] for i in range(3) for j in range(i + 1, 3)):
         raise ValueError('Patient overlap in split manifest')
-    if any(patient not in shared_norm for patients in patient_sets for patient in patients):
+    if shared_norm is not None and any(
+        patient not in shared_norm for patients in patient_sets for patient in patients
+    ):
         raise ValueError('Missing patient normalization values in split manifest')
     original_counts = {name: len(pairs) for name, pairs in splits.items()}
     if args.tumor_only:
@@ -163,7 +186,7 @@ def main():
         for percentile in percentiles:
             for kernel_size in [3, 5]:
                 for min_area in [15, 50]:
-                    for erosion_kernel_size in ([0] if args.no_erosion else [0, 9, 15, 21]):
+                    for erosion_kernel_size in erosion_sizes:
                         candidates.append({'threshold_method': method, 'percentile': percentile,
                                            'kernel_size': kernel_size, 'min_area': min_area,
                                            'erosion_kernel_size': erosion_kernel_size})
@@ -172,7 +195,7 @@ def main():
     tuning = []
     # 최적의 파라미터를 검증을 통해 선택한다.
     for index, params in enumerate(candidates, start=1):
-        rows = evaluate(splits['val'], params, shared_norm=shared_norm)
+        rows = evaluate(splits['val'], params, shared_norm=shared_norm, **evaluation_options)
         score = avg(rows, 'dice')
         print(f'[{index}/{len(candidates)}] val Dice: {score:.4f}; params: {params}', flush=True)
         tuning.append({'params': params, 'val_dice': score, 'val_iou': avg(rows, 'iou')})
@@ -185,16 +208,22 @@ def main():
     print(f'Best validation Dice: {best_score:.4f}; params: {best_params}')
 
     # 최적 파라미터를 확정한 뒤, 별도로 보관한 테스트 세트에서 한 번 평가한다.
-    rows = evaluate(splits['test'], best_params, save_dir=args.out / 'examples', shared_norm=shared_norm)
+    rows = evaluate(splits['test'], best_params, save_dir=args.out / 'examples',
+                    shared_norm=shared_norm, **evaluation_options)
     with (args.out / 'test_metrics.csv').open('w', newline='', encoding='utf-8-sig') as f:
         writer = csv.DictWriter(f, fieldnames=['image', 'patient', 'dice', 'iou', 'ms'])
         writer.writeheader()
         writer.writerows(rows)
     report = {'method': 'histogram threshold + morphology', 'params': best_params,
               'evaluation_scope': 'tumor-positive slices only' if args.tumor_only else 'all slices',
-              'preprocessing': 'FLAIR + patient p1/p99 normalization (uint8) + shared ROI',
+              'preprocessing': ('FLAIR + patient p1/p99 normalization (uint8) + shared ROI + erosion'
+                                if baseline is None else
+                                'BGR-to-grayscale + legacy foreground ROI' +
+                                (' + erosion' if args.erosion else ', no erosion')),
               'seed': info['seed'], 'split_file': str(args.split_file.resolve()),
-              'timing_scope': 'ROI + normalization + segmentation (excludes image reading)', 'original_split_counts': original_counts,
+              'timing_scope': ('ROI + segmentation (excludes image reading and grayscale conversion)'
+                               if baseline else 'ROI + normalization + segmentation (excludes image reading)'),
+              'original_split_counts': original_counts,
               'validation_slices': len(splits['val']), 'best_validation_dice': best_score,
               'test_slices': len(rows), 'test_patients': len(set(row['patient'] for row in rows)),
               'dice_mean': avg(rows, 'dice'), 'iou_mean': avg(rows, 'iou'),
