@@ -1,0 +1,11 @@
+﻿학습 장치: cuda
+Epoch 1/20 | train loss 1.0802 | val Dice 0.4619 | val IoU 0.3003
+Epoch 2/20 | train loss 0.8984 | val Dice 0.4675 | val IoU 0.3051
+Epoch 3/20 | train loss 0.6285 | val Dice 0.0000 | val IoU 0.0000
+Epoch 4/20 | train loss 0.4726 | val Dice 0.0000 | val IoU 0.0000
+Epoch 5/20 | train loss 0.4691 | val Dice 0.0000 | val IoU 0.0000
+Epoch 6/20 | train loss 0.4692 | val Dice 0.0000 | val IoU 0.0000
+Epoch 7/20 | train loss 0.4610 | val Dice 0.0000 | val IoU 0.0000
+Epoch 8/20 | train loss 0.4354 | val Dice 0.0000 | val IoU 0.0000
+Epoch 9/20 | train loss 0.3960 | val Dice 0.3596 | val IoU 0.2192
+Epoch 10/20 | train loss 0.4308 | val Dice 0.0000 | val IoU 0.0000

@@ -55,23 +55,36 @@ class UNet(nn.Module):
         return self.output(x)
 
 
-def segmentation_loss(logits, masks):
+def segmentation_loss(logits, masks, dice_mode='sample'):
+    """BCE + Soft Dice 손실.
+
+    dice_mode='sample': 슬라이스마다 Dice를 계산해 평균 (기존 방식)
+        → 종양 없는 슬라이스는 '아무것도 예측하지 않으면' Dice=1(손실 0)이 되어
+          전부 배경으로 예측하는 쪽으로 붕괴할 수 있다.
+    dice_mode='batch': 배치 전체 픽셀을 합쳐 Dice를 한 번 계산
+        → 빈 슬라이스가 '빈 예측'에 보상을 주지 않아 종양을 찾도록 유도한다.
+    """
     probabilities = logits.sigmoid().flatten(1)
     targets = masks.flatten(1)
-    overlap = (probabilities * targets).sum(dim=1)
-    total = probabilities.sum(dim=1) + targets.sum(dim=1)
-    soft_dice = (2 * overlap + 1) / (total + 1)
-    return F.binary_cross_entropy_with_logits(logits, masks) + (1 - soft_dice.mean())
+    if dice_mode == 'batch':
+        overlap = (probabilities * targets).sum()
+        total = probabilities.sum() + targets.sum()
+        soft_dice = (2 * overlap + 1) / (total + 1)
+    else:
+        overlap = (probabilities * targets).sum(dim=1)
+        total = probabilities.sum(dim=1) + targets.sum(dim=1)
+        soft_dice = ((2 * overlap + 1) / (total + 1)).mean()
+    return F.binary_cross_entropy_with_logits(logits, masks) + (1 - soft_dice)
 
 
-def train_epoch(model, loader, optimizer, device):
+def train_epoch(model, loader, optimizer, device, dice_mode='sample'):
     model.train()
     loss_sum = 0.0
     sample_count = 0
     for images, masks in loader:
         images, masks = images.to(device), masks.to(device)
         optimizer.zero_grad()
-        loss = segmentation_loss(model(images), masks)
+        loss = segmentation_loss(model(images), masks, dice_mode)
         loss.backward()
         optimizer.step()
         loss_sum += loss.item() * images.size(0)
@@ -106,6 +119,8 @@ def main():
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--dice-mode', choices=['sample', 'batch'], default='sample',
+                        help='Dice 손실 계산 단위 (기본 sample = 기존 방식)')
     args = parser.parse_args()
     if args.epochs < 1 or args.batch_size < 1 or args.lr <= 0:
         parser.error('--epochs, --batch-size, --lr은 양수여야 합니다.')
@@ -128,9 +143,9 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     args.checkpoint.parent.mkdir(parents=True, exist_ok=True)
     best_dice = -1.0
-    print(f'학습 장치: {device}', flush=True)
+    print(f'학습 장치: {device} | Dice 손실 단위: {args.dice_mode} | lr {args.lr}', flush=True)
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_epoch(model, train_loader, optimizer, device)
+        train_loss = train_epoch(model, train_loader, optimizer, device, args.dice_mode)
         val_dice, val_iou = evaluate(model, val_loader, device)
         print(f'Epoch {epoch}/{args.epochs} | train loss {train_loss:.4f} | '
               f'val Dice {val_dice:.4f} | val IoU {val_iou:.4f}', flush=True)

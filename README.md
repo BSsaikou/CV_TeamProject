@@ -15,6 +15,7 @@ https://app.notion.com/p/41b9e7d5dcd880dbbf8beb0c273160ed?source=copy_link
 | `eda.py` | 데이터 통계·샘플 그림 생성 |
 | `baseline.py` | 개선 전 고전 기법 (원본 3채널을 회색조로 변환, 임계값 + 모폴로지) |
 | `baseline_v2.py` | 개선 후 고전 기법 (FLAIR, 환자별 정규화, ROI 침식 탐색) |
+| `U-Net.py` | 딥러닝: 2D U-Net 학습·검증·테스트 (`get_loaders()` 사용) |
 
 ## 설치
 가상환경 사용을 권장합니다.
@@ -112,10 +113,51 @@ python baseline.py --tumor-only --erosion --out results_before_preprocess_tumor_
 - `summary.json`: 테스트 평균값
 - `examples/`: 원본 / 정답 / 예측 / 오버레이 (초록=일치, 빨강=과검출, 파랑=미검출)
 
+## 딥러닝: U-Net 학습
+```bash
+# 권장: 배치 단위 Dice 손실 + 학습률 1e-4
+python U-Net.py --data ./kaggle_3m --dice-mode batch --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
+
+# 기존 방식 (슬라이스 단위 Dice 손실, 기본값)
+python U-Net.py --data ./kaggle_3m --checkpoint results_unet/best.pt
+```
+학습 로그를 파일로 남기려면 Windows PowerShell에서는 `| Tee-Object -FilePath train_log.txt`, macOS·Linux에서는 `| tee train_log.txt`를 붙입니다.
+
+### 모델과 학습 설정
+| 항목 | 값 |
+|---|---|
+| 모델 | 직접 구현한 2D U-Net (인코더·디코더 4단계, 기본 채널 32, 사전학습 없음) |
+| 파라미터 수 | 7,762,465개 |
+| 입력 | FLAIR 1채널, 256×256, 환자별 p1~p99 정규화 (`dataset.py`) |
+| 손실 함수 | BCE + Soft Dice |
+| 옵티마이저 | Adam, 기본 lr 1e-3, 권장 1e-4 (`--lr`) |
+| 에폭 / 배치 | 20 / 4 (`--epochs`, `--batch-size`) |
+| 증강 | 학습 세트에만 좌우 뒤집기, ±15° 회전, 밝기·대비 |
+| 모델 선택 | 검증 Dice가 가장 높은 에폭의 가중치를 `--checkpoint`에 저장하고, 그 가중치로 테스트 |
+
+- 같은 `--checkpoint` 경로로 다시 실행하면 기존 가중치를 덮어씁니다. 실험마다 경로를 다르게 지정하세요.
+- 가중치 파일(`*.pt`)은 커밋하지 않습니다. 학습 로그만 결과 폴더에 `train_log.txt`로 올립니다.
+
+### `--dice-mode` (Dice 손실 계산 단위)
+- `sample` (기본값): 슬라이스마다 Dice를 계산해 평균합니다. 종양 없는 슬라이스(약 2/3)는 아무것도 예측하지 않으면 Dice가 1이 되어 손실이 0이 됩니다. 이 때문에 1차 학습에서 3에폭부터 모델이 전부 배경으로 예측하고 검증 Dice가 0이 되는 붕괴가 발생했습니다(학습 손실이 '전부 배경' 예측의 손실값인 약 0.47에서 정체).
+- `batch`: 배치 전체 픽셀을 합쳐 Dice를 한 번 계산합니다. 빈 슬라이스가 빈 예측에 보상을 주지 않아 붕괴가 일어나지 않습니다.
+
+### 1차 실험 결과 (RTX 4060, 20 epochs, batch 4)
+| 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
+|---|---|---|---|---|
+| 슬라이스 단위 Dice · lr 1e-3 | 0.468 (2) → 3~8·10에폭 0으로 붕괴(9에폭만 0.360), 10에폭에서 중단 | - | - | `results_unet/train_log_sample_dice.txt` |
+| 배치 단위 Dice · lr 1e-3 | 0.734 (9), 10·11·19에폭에 발산 | 0.661 | 0.493 | `results_unet_batchdice/train_log.txt` |
+| **배치 단위 Dice · lr 1e-4** | **0.844 (18)** | **0.797** | **0.663** | `results_unet_batchdice_lr1e-4/train_log.txt` |
+
+학습률은 검증 Dice로 선택했습니다(테스트 점수로 고르지 않음). 위 Dice/IoU는 아래 "평가 기준 주의"의 전체 픽셀 합산 기준입니다.
+
+### 평가 기준 주의
+현재 `U-Net.py`의 검증·테스트 Dice/IoU는 빈 슬라이스를 포함한 전체 픽셀을 합산해 계산합니다. 고전 기법 결과(종양 있는 슬라이스별 평균)와 기준이 다르므로 그대로 비교하지 않습니다. 계획서 기준(종양 있는 슬라이스별 평균 Dice·IoU + 빈 슬라이스 오검출 비율)으로 통일할 예정입니다.
+
 ## 주의
 - 뇌 영역은 밝기 기반으로 대략 추정하므로 두개골/잡음 등으로 오검출될 수 있습니다. 검증 실패 사례를 보고 개선하세요.
 - `baseline_v2.py`와 딥러닝은 FLAIR 채널과 환자별 정규화 값을 공유합니다. `baseline_v2.py`는 Otsu 입력을 위해 정규화 값을 8비트로 변환하고 공통 ROI를 사용합니다.
-- 데이터셋 원본, 모델 가중치(`*.pth`)는 커밋하지 않습니다.
+- 데이터셋 원본, 모델 가중치(`*.pth`, `*.pt`)는 커밋하지 않습니다.
 - 실제 의료 진단용이 아닙니다.
 
 ## 공통 코드와 고전 기법의 경계
