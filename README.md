@@ -145,7 +145,7 @@ python U-Net.py --data ./kaggle_3m --checkpoint results_unet/best.pt
 ### 1차 실험 결과 (RTX 4060, 20 epochs, batch 4)
 | 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
 |---|---|---|---|---|
-| 슬라이스 단위 Dice · lr 1e-3 | 0.468 (2) → 3에폭부터 0으로 붕괴, 6에폭에서 중단 | - | - | `results_unet/train_log_sample_dice.txt` |
+| 슬라이스 단위 Dice · lr 1e-3 | 0.468 (2) → 3~8·10에폭 0으로 붕괴(9에폭만 0.360), 10에폭에서 중단 | - | - | `results_unet/train_log_sample_dice.txt` |
 | 배치 단위 Dice · lr 1e-3 | 0.734 (9), 10·11·19에폭에 발산 | 0.661 | 0.493 | `results_unet_batchdice/train_log.txt` |
 | **배치 단위 Dice · lr 1e-4** | **0.844 (18)** | **0.797** | **0.663** | `results_unet_batchdice_lr1e-4/train_log.txt` |
 
