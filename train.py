@@ -1,58 +1,14 @@
-"""FLAIR 슬라이스에서 종양을 분할하는 2D U-Net 학습."""
+"""FLAIR 슬라이스에서 종양을 분할하는 2D 모델 학습."""
 
 import argparse
 from pathlib import Path
 
 import torch
-from torch import nn
 from torch.nn import functional as F
 
 from dataset import get_loaders
-
-
-def double_conv(in_channels, out_channels):
-    return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False),
-        nn.BatchNorm2d(out_channels),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False),
-        nn.BatchNorm2d(out_channels),
-        nn.ReLU(inplace=True),
-    )
-
-
-class UNet(nn.Module):
-    def __init__(self, base_channels=32):
-        super().__init__()
-        widths = [base_channels * 2**level for level in range(5)]
-        self.encoder = nn.ModuleList(
-            double_conv(source, target)
-            for source, target in zip([1, *widths[:3]], widths[:4])
-        )
-        self.pool = nn.MaxPool2d(2)
-        self.bottleneck = double_conv(widths[3], widths[4])
-        self.upsample = nn.ModuleList(
-            nn.ConvTranspose2d(source, target, kernel_size=2, stride=2)
-            for source, target in zip(widths[:0:-1], widths[-2::-1])
-        )
-        self.decoder = nn.ModuleList(
-            double_conv(2 * width, width) for width in reversed(widths[:4])
-        )
-        self.output = nn.Conv2d(widths[0], 1, kernel_size=1)
-
-    def forward(self, image):
-        skips = []
-        x = image
-        for block in self.encoder:
-            x = block(x)
-            skips.append(x)
-            x = self.pool(x)
-
-        x = self.bottleneck(x)
-        for upsample, block, skip in zip(self.upsample, self.decoder, reversed(skips)):
-            x = upsample(x, output_size=skip.shape)
-            x = block(torch.cat((skip, x), dim=1))
-        return self.output(x)
+from deeplabv3plus import DeepLabV3Plus
+from unet import UNet
 
 
 def segmentation_loss(logits, masks, dice_mode='sample'):
@@ -114,7 +70,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data', type=Path, help='kaggle_3m 경로')
     parser.add_argument('--split', type=Path, default=Path('splits/split.json'))
-    parser.add_argument('--checkpoint', type=Path, default=Path('results_unet/best.pt'))
+    parser.add_argument('--model', choices=['unet', 'deeplabv3plus'], default='unet')
+    parser.add_argument('--checkpoint', type=Path,
+                        help='가중치 저장 경로 (기본 results_<model>/best.pt)')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -122,6 +80,8 @@ def main():
     parser.add_argument('--dice-mode', choices=['sample', 'batch'], default='sample',
                         help='Dice 손실 계산 단위 (기본 sample = 기존 방식)')
     args = parser.parse_args()
+    if args.checkpoint is None:
+        args.checkpoint = Path(f'results_{args.model}/best.pt')
     if args.epochs < 1 or args.batch_size < 1 or args.lr <= 0:
         parser.error('--epochs, --batch-size, --lr은 양수여야 합니다.')
     if not args.split.is_file():
@@ -139,7 +99,8 @@ def main():
     if not len(train_loader):
         parser.error(f'--batch-size를 학습 슬라이스 수({len(train_loader.dataset)}) 이하로 줄이세요.')
 
-    model = UNet().to(device)
+    model_class = {'unet': UNet, 'deeplabv3plus': DeepLabV3Plus}[args.model]
+    model = model_class().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     args.checkpoint.parent.mkdir(parents=True, exist_ok=True)
     best_dice = -1.0

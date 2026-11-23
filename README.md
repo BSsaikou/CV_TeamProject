@@ -15,7 +15,10 @@ https://app.notion.com/p/41b9e7d5dcd880dbbf8beb0c273160ed?source=copy_link
 | `eda.py` | 데이터 통계·샘플 그림 생성 |
 | `baseline.py` | 개선 전 고전 기법 (원본 3채널을 회색조로 변환, 임계값 + 모폴로지) |
 | `baseline_v2.py` | 개선 후 고전 기법 (FLAIR, 환자별 정규화, ROI 침식 탐색) |
-| `U-Net.py` | 딥러닝: 2D U-Net 학습·검증·테스트 (`get_loaders()` 사용) |
+| `train.py` | U-Net 및 DeepLabv3+ 공용 학습·검증·테스트 (`get_loaders()` 사용) |
+| `unet.py` | FLAIR 1채널용 2D U-Net 모델 |
+| `deeplabv3plus.py` | FLAIR 1채널용 DeepLabv3+ 모델 |
+| `U-Net.py` | 기존 실행 명령을 `train.py`로 연결 |
 
 ## 설치
 가상환경 사용을 권장합니다.
@@ -116,10 +119,10 @@ python baseline.py --tumor-only --erosion --out results_before_preprocess_tumor_
 ## 딥러닝: U-Net 학습
 ```bash
 # 권장: 배치 단위 Dice 손실 + 학습률 1e-4
-python U-Net.py --data ./kaggle_3m --dice-mode batch --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
+python train.py --model unet --data ./kaggle_3m --dice-mode batch --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
 
 # 기존 방식 (슬라이스 단위 Dice 손실, 기본값)
-python U-Net.py --data ./kaggle_3m --checkpoint results_unet/best.pt
+python train.py --model unet --data ./kaggle_3m --checkpoint results_unet/best.pt
 ```
 학습 로그를 파일로 남기려면 Windows PowerShell에서는 `| Tee-Object -FilePath train_log.txt`, macOS·Linux에서는 `| tee train_log.txt`를 붙입니다.
 
@@ -152,7 +155,17 @@ python U-Net.py --data ./kaggle_3m --checkpoint results_unet/best.pt
 학습률은 검증 Dice로 선택했습니다(테스트 점수로 고르지 않음). 위 Dice/IoU는 아래 "평가 기준 주의"의 전체 픽셀 합산 기준입니다.
 
 ### 평가 기준 주의
-현재 `U-Net.py`의 검증·테스트 Dice/IoU는 빈 슬라이스를 포함한 전체 픽셀을 합산해 계산합니다. 고전 기법 결과(종양 있는 슬라이스별 평균)와 기준이 다르므로 그대로 비교하지 않습니다. 계획서 기준(종양 있는 슬라이스별 평균 Dice·IoU + 빈 슬라이스 오검출 비율)으로 통일할 예정입니다.
+현재 `train.py`의 검증·테스트 Dice/IoU는 빈 슬라이스를 포함한 전체 픽셀을 합산해 계산합니다. 고전 기법 결과(종양 있는 슬라이스별 평균)와 기준이 다르므로 그대로 비교하지 않습니다. 계획서 기준(종양 있는 슬라이스별 평균 Dice·IoU + 빈 슬라이스 오검출 비율)으로 통일할 예정입니다.
+
+## 딥러닝: DeepLabv3+ 학습
+
+```bash
+python train.py --model deeplabv3plus --data ./kaggle_3m --dice-mode batch --lr 1e-4
+```
+
+FLAIR 1채널에 맞춘 경량 인코더를 사전학습 없이 사용합니다. ASPP로 여러 범위의 문맥을 추출하고, 디코더에서 입력 해상도의 1/4 크기인 저수준 특징과 결합해 원본 크기의 종양 분할 로짓을 출력합니다. [DeepLabv3+ 논문](https://arxiv.org/abs/1802.02611)
+
+U-Net과 같은 환자 분할·전처리·손실 함수·평가 코드를 사용합니다. 검증 Dice가 가장 높은 가중치는 기본적으로 `results_deeplabv3plus/best.pt`에 저장되며, 테스트 Dice와 IoU는 해당 가중치로 계산합니다.
 
 ## 주의
 - 뇌 영역은 밝기 기반으로 대략 추정하므로 두개골/잡음 등으로 오검출될 수 있습니다. 검증 실패 사례를 보고 개선하세요.
@@ -160,15 +173,3 @@ python U-Net.py --data ./kaggle_3m --checkpoint results_unet/best.pt
 - 데이터셋 원본, 모델 가중치(`*.pth`, `*.pt`)는 커밋하지 않습니다.
 - 실제 의료 진단용이 아닙니다.
 
-## 공통 코드와 고전 기법의 경계
-- `split.py`: 환자 분할과 환자별 정규화 값을 계산하여 공용 JSON을 생성합니다.
-- `preprocess.py`: FLAIR·마스크 읽기, ROI 생성, 정규화를 담당합니다.
-- `baseline.py`: 회색조 영상과 초기 버전의 ROI를 사용하고, 검증 탐색과 테스트 평가 코드를 `baseline_v2.py`와 공유합니다.
-- `baseline_v2.py`: 공용 JSON을 읽고 공통 전처리 후 임계값·모폴로지 분할, 검증 탐색, 테스트 평가를 수행합니다.
-- `dataset.py`: 같은 공용 JSON과 전처리를 딥러닝 Dataset에 연결합니다.
-
-두 스크립트는 seed와 환자 구성을 공용 JSON에서 읽습니다.
-다른 분할은 `--split-file`로 지정합니다. `--data`로 데이터 루트를 지정할 수 있습니다.
-`baseline_v2.py`에서 ROI 침식 커널 21은 공통 함수의 `erode_px=10`으로 변환됩니다.
-`time_ms_mean`은 이미지 읽기 이후 ROI 생성과 분할에 걸린 평균 시간입니다. `baseline_v2.py`에서는 정규화 시간도 포함합니다.
-기존 실험 폴더의 결과 파일은 과거 실행 기록으로 유지됩니다.
