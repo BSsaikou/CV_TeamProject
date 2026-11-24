@@ -1,0 +1,57 @@
+{
+  "mode": "train_and_test",
+  "model": "unet",
+  "checkpoint": "C:\\Users\\user\\Desktop\\CV_TeamProject\\results_unet_tumor_only\\best.pt",
+  "dataset": {
+    "root": "C:\\Users\\user\\Desktop\\CV_TeamProject\\kaggle_3m",
+    "split_file": "C:\\Users\\user\\Desktop\\CV_TeamProject\\splits\\split.json",
+    "split_seed": 42,
+    "tumor_only": true,
+    "splits": {
+      "train": {
+        "slices": 922,
+        "patients": 77
+      },
+      "val": {
+        "slices": 236,
+        "patients": 16
+      },
+      "test": {
+        "slices": 215,
+        "patients": 17
+      }
+    },
+    "input_size": 256,
+    "preprocessing": "FLAIR + patient p1/p99 normalization + resize when needed"
+  },
+  "training": {
+    "epochs": 20,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "optimizer": "Adam",
+    "loss": "BCE + Soft Dice",
+    "dice_mode": "batch",
+    "seed": 42,
+    "augmentation": true,
+    "best_epoch": 15,
+    "best_validation_global_dice": 0.8480002805031732,
+    "best_validation_global_iou": 0.7361115338409673
+  },
+  "test": {
+    "batch_size": 4,
+    "seed": 42,
+    "probability_threshold": 0.5,
+    "global_dice": 0.8670362652513746,
+    "global_iou": 0.7652815696203611
+  },
+  "environment": {
+    "platform": "Windows-11-10.0.22631-SP0",
+    "python": "3.14.7",
+    "pytorch": "2.11.0+cu128",
+    "numpy": "2.5.4",
+    "opencv": "5.0.0",
+    "device": "cuda",
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 4060"
+  }
+}
