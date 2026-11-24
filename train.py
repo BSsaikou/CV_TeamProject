@@ -50,20 +50,41 @@ def train_epoch(model, loader, optimizer, device, dice_mode='sample'):
 
 @torch.no_grad()
 def evaluate(model, loader, device):
+    """종양 클래스의 Dice·IoU를 두 가지 방식으로 계산한다.
+
+    - pooled: 모든 슬라이스의 픽셀을 합산해 한 번 계산 (기존 방식)
+    - mean  : 슬라이스마다 계산해 평균 (고전 기법 baseline_v2.py의 metrics와 같은 정의,
+              예측·정답이 모두 비면 1)
+    """
     model.eval()
     intersection = predicted_pixels = target_pixels = 0
+    slice_dice, slice_iou = [], []
     for images, masks in loader:
         predictions = model(images.to(device)) >= 0  # sigmoid 확률 0.5
         targets = masks.to(device).bool()
+
+        # ----- 전체 픽셀 합산 -----
         intersection += (predictions & targets).sum().item()
         predicted_pixels += predictions.sum().item()
         target_pixels += targets.sum().item()
 
-    # 전체 슬라이스의 픽셀을 합산해 종양 클래스의 Dice와 IoU를 계산한다.
+        # ----- 슬라이스별 -----
+        inter = (predictions & targets).flatten(1).sum(1).float()
+        p_sum = predictions.flatten(1).sum(1).float()
+        g_sum = targets.flatten(1).sum(1).float()
+        union = p_sum + g_sum - inter
+        dice = torch.where(p_sum + g_sum > 0, 2 * inter / (p_sum + g_sum).clamp(min=1),
+                           torch.ones_like(inter))
+        iou = torch.where(union > 0, inter / union.clamp(min=1), torch.ones_like(inter))
+        slice_dice += dice.tolist()
+        slice_iou += iou.tolist()
+
     total = predicted_pixels + target_pixels
-    dice = 2 * intersection / total if total else 1.0
-    iou = intersection / (total - intersection) if total else 1.0
-    return dice, iou
+    pooled_dice = 2 * intersection / total if total else 1.0
+    pooled_iou = intersection / (total - intersection) if total else 1.0
+    mean_dice = sum(slice_dice) / len(slice_dice)
+    mean_iou = sum(slice_iou) / len(slice_iou)
+    return pooled_dice, pooled_iou, mean_dice, mean_iou
 
 
 def main():
@@ -79,6 +100,8 @@ def main():
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--dice-mode', choices=['sample', 'batch'], default='sample',
                         help='Dice 손실 계산 단위 (기본 sample = 기존 방식)')
+    parser.add_argument('--tumor-only', action='store_true',
+                        help='학습·검증·테스트 모두 종양이 있는 슬라이스만 사용')
     args = parser.parse_args()
     if args.checkpoint is None:
         args.checkpoint = Path(f'results_{args.model}/best.pt')
@@ -95,6 +118,7 @@ def main():
         data_root=args.data,
         num_workers=0,
         seed=args.seed,
+        tumor_only=args.tumor_only,
     )
     if not len(train_loader):
         parser.error(f'--batch-size를 학습 슬라이스 수({len(train_loader.dataset)}) 이하로 줄이세요.')
@@ -104,19 +128,26 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     args.checkpoint.parent.mkdir(parents=True, exist_ok=True)
     best_dice = -1.0
-    print(f'학습 장치: {device} | Dice 손실 단위: {args.dice_mode} | lr {args.lr}', flush=True)
+    scope = '종양 슬라이스만' if args.tumor_only else '전체 슬라이스'
+    print(f'학습 장치: {device} | 모델: {args.model} | 데이터: {scope} '
+          f'(train {len(train_loader.dataset)} / val {len(val_loader.dataset)} / '
+          f'test {len(test_loader.dataset)}) | Dice 손실 단위: {args.dice_mode} | lr {args.lr}',
+          flush=True)
     for epoch in range(1, args.epochs + 1):
         train_loss = train_epoch(model, train_loader, optimizer, device, args.dice_mode)
-        val_dice, val_iou = evaluate(model, val_loader, device)
+        val_dice, val_iou, val_mean_dice, val_mean_iou = evaluate(model, val_loader, device)
         print(f'Epoch {epoch}/{args.epochs} | train loss {train_loss:.4f} | '
-              f'val Dice {val_dice:.4f} | val IoU {val_iou:.4f}', flush=True)
+              f'val Dice {val_dice:.4f} | val IoU {val_iou:.4f} | '
+              f'val 슬라이스평균 Dice {val_mean_dice:.4f} | IoU {val_mean_iou:.4f}', flush=True)
         if val_dice > best_dice:
             best_dice = val_dice
             torch.save(model.state_dict(), args.checkpoint)
 
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
-    test_dice, test_iou = evaluate(model, test_loader, device)
-    print(f'Test Dice {test_dice:.4f} | Test IoU {test_iou:.4f}')
+    test_dice, test_iou, test_mean_dice, test_mean_iou = evaluate(model, test_loader, device)
+    print(f'Test Dice {test_dice:.4f} | Test IoU {test_iou:.4f} (전체 픽셀 합산)')
+    print(f'Test 슬라이스평균 Dice {test_mean_dice:.4f} | IoU {test_mean_iou:.4f} '
+          f'(고전 기법과 같은 정의)')
     print(f'최고 검증 Dice 모델: {args.checkpoint}')
 
 

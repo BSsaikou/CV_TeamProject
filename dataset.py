@@ -110,16 +110,20 @@ class LGGDataset(Dataset):
 # DataLoader 묶음 (모델 담당은 이것만 호출)
 # =====================================================================
 def get_loaders(batch_size=16, split_json='splits/split.json', data_root=None,
-                size=256, augment=True, num_workers=2, seed=42):
-    """train(증강 O, 섞기 O) / val / test(증강 X, 섞기 X) 로더를 반환한다."""
+                size=256, augment=True, num_workers=2, seed=42, tumor_only=False):
+    """train(증강 O, 섞기 O) / val / test(증강 X, 섞기 X) 로더를 반환한다.
+
+    tumor_only=True 이면 세 세트 모두 종양이 있는 슬라이스만 사용한다
+    (train 922장 / val 236장 / test 215장).
+    """
     if data_root is None:
         from data import get_data_path
         data_root = get_data_path()
 
     aug = Augment(seed=seed) if augment else None
-    train_ds = LGGDataset(split_json, data_root, 'train', size=size, augment=aug)
-    val_ds = LGGDataset(split_json, data_root, 'val', size=size)
-    test_ds = LGGDataset(split_json, data_root, 'test', size=size)
+    train_ds = LGGDataset(split_json, data_root, 'train', size=size, augment=aug, tumor_only=tumor_only)
+    val_ds = LGGDataset(split_json, data_root, 'val', size=size, tumor_only=tumor_only)
+    test_ds = LGGDataset(split_json, data_root, 'test', size=size, tumor_only=tumor_only)
 
     g = torch.Generator().manual_seed(seed)
     pin = torch.cuda.is_available()
