@@ -66,22 +66,27 @@ def save_example(path, image, target, prediction):
 def evaluate(model, loader, device, examples_dir=None):
     model.eval()
     intersection = predicted_pixels = target_pixels = 0
-    saved_examples = 0
+    saved_examples = {'tumor': 0, 'no_tumor': 0}
+    slice_index = 0
     for images, masks in loader:
         predictions = model(images.to(device)) >= 0  # sigmoid 확률 0.5
         targets = masks.to(device).bool()
         intersection += (predictions & targets).sum().item()
         predicted_pixels += predictions.sum().item()
         target_pixels += targets.sum().item()
-        if examples_dir is not None and saved_examples < 8:
-            count = min(len(images), 8 - saved_examples)
-            for image, target, prediction in zip(
-                images[:count], targets[:count].cpu(), predictions[:count].cpu()
-            ):
-                item = loader.dataset.info(saved_examples)
-                filename = f'{saved_examples:03d}_{Path(item["image"]).stem}.png'
-                save_example(examples_dir / filename, image, target, prediction)
-                saved_examples += 1
+        if examples_dir is not None and min(saved_examples.values()) < 5:
+            for offset, has_tumor in enumerate(masks.flatten(1).any(dim=1).tolist()):
+                group = 'tumor' if has_tumor else 'no_tumor'
+                if saved_examples[group] >= 5:
+                    continue
+                group_dir = examples_dir / group
+                group_dir.mkdir(exist_ok=True)
+                item = loader.dataset.info(slice_index + offset)
+                filename = f'{saved_examples[group] + 1:02d}_{Path(item["image"]).stem}.png'
+                save_example(group_dir / filename, images[offset],
+                             masks[offset].bool(), predictions[offset].cpu())
+                saved_examples[group] += 1
+        slice_index += len(images)
 
     # 전체 슬라이스의 픽셀을 합산해 종양 클래스의 Dice와 IoU를 계산한다.
     total = predicted_pixels + target_pixels
@@ -99,7 +104,8 @@ def test_checkpoint(model, test_loader, device, args, results_dir, training=None
     split = json.loads(args.split.read_text(encoding='utf-8'))
     split_counts = {}
     for name in ('train', 'val', 'test'):
-        items = [item for item in split['slices'] if item['split'] == name]
+        items = [item for item in split['slices']
+                 if item['split'] == name and (not args.tumor_only or item['has_tumor'])]
         split_counts[name] = {
             'slices': len(items), 'patients': len({item['patient'] for item in items}),
         }
@@ -111,6 +117,7 @@ def test_checkpoint(model, test_loader, device, args, results_dir, training=None
             'root': str(test_loader.dataset.root.resolve()),
             'split_file': str(args.split.resolve()),
             'split_seed': split.get('seed'),
+            'tumor_only': args.tumor_only,
             'splits': split_counts,
             'input_size': test_loader.dataset.size,
             'preprocessing': 'FLAIR + patient p1/p99 normalization + resize when needed',
@@ -147,6 +154,8 @@ def main():
                         help='가중치 저장 또는 불러오기 경로 (기본 results_<model>/best.pt)')
     parser.add_argument('--test-only', action='store_true',
                         help='저장된 가중치를 불러와 테스트 세트만 평가')
+    parser.add_argument('--tumor-only', action='store_true',
+                        help='학습·검증·테스트에서 종양이 있는 슬라이스만 사용')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -167,7 +176,8 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_class = {'unet': UNet, 'deeplabv3plus': DeepLabV3Plus}[args.model]
     if args.test_only:
-        test_loader = get_test_loader(args.batch_size, args.split, args.data, num_workers=0)
+        test_loader = get_test_loader(args.batch_size, args.split, args.data, num_workers=0,
+                                      tumor_only=args.tumor_only)
         test_checkpoint(model_class().to(device), test_loader, device, args,
                         create_results_dir(args.checkpoint))
         return
@@ -178,6 +188,7 @@ def main():
         data_root=args.data,
         num_workers=0,
         seed=args.seed,
+        tumor_only=args.tumor_only,
     )
     if not len(train_loader):
         parser.error(f'--batch-size를 학습 슬라이스 수({len(train_loader.dataset)}) 이하로 줄이세요.')

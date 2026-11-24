@@ -114,20 +114,87 @@ python baseline.py --tumor-only --erosion --out results_before_preprocess_tumor_
 - `best_params.json`: 검증 성능으로 정한 최종 설정
 - `test_metrics.csv`: 테스트 이미지별 추론시간(ms)
 - `summary.json`: 테스트 Global Dice, Global IoU 및 평균 추론시간
-- `examples/`: 원본 / 정답 / 예측 / 오버레이 (초록=일치, 빨강=과검출, 파랑=미검출)
+- `examples/tumor/`와 `examples/no_tumor/`: 정답 마스크 기준으로 종양이 있는 슬라이스와 없는 슬라이스를 각각 최대 5장 저장합니다. 패널은 원본 / 정답 / 예측 / 오버레이 순서입니다(초록=일치, 빨강=과검출, 파랑=미검출). `--tumor-only` 실행에서는 종양이 있는 예시만 생성됩니다.
 
-## 딥러닝: U-Net 학습
-```bash
-# 권장: 배치 단위 Dice 손실 + 학습률 1e-4
-python train.py --model unet --data ./kaggle_3m --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
-```
-학습 로그를 파일로 남기려면 Windows PowerShell에서는 `| Tee-Object -FilePath train_log.txt`, macOS·Linux에서는 `| tee train_log.txt`를 붙입니다.
+## 딥러닝: U-Net
 
-### 모델과 학습 설정
+### 모델 구성
+
 | 항목 | 값 |
 |---|---|
 | 모델 | 직접 구현한 2D U-Net (인코더·디코더 4단계, 기본 채널 32, 사전학습 없음) |
 | 파라미터 수 | 7,762,465개 |
+
+### 전체 슬라이스로 학습 및 평가
+
+```bash
+python train.py --model unet --data ./kaggle_3m --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
+```
+
+### 저장된 가중치로 테스트만 실행
+
+```bash
+python train.py --model unet --test-only --data ./kaggle_3m --checkpoint results_unet_batchdice_lr1e-4/best.pt
+```
+
+### 종양이 있는 슬라이스만 사용
+
+```bash
+python train.py --model unet --tumor-only --data ./kaggle_3m --lr 1e-4 --checkpoint results_unet_tumor_only/best.pt
+python train.py --model unet --test-only --tumor-only --data ./kaggle_3m --checkpoint results_unet_tumor_only/best.pt
+```
+
+### 실험 결과
+
+RTX 4060, 최대 20에폭, 배치 크기 4로 실행했습니다.
+| 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
+|---|---|---|---|---|
+| 슬라이스 단위 Dice · lr 1e-3 | 0.468 (2) → 3~8·10에폭 0으로 붕괴(9에폭만 0.360), 10에폭에서 중단 | - | - | `results_unet/train_log_sample_dice.txt` |
+| 배치 단위 Dice · lr 1e-3 | 0.734 (9), 10·11·19에폭에 발산 | 0.661 | 0.493 | `results_unet_batchdice/train_log.txt` |
+| **배치 단위 Dice · lr 1e-4** | **0.844 (18)** | **0.797** | **0.663** | `results_unet_batchdice_lr1e-4/train_log.txt` |
+
+학습률은 검증 Dice로 선택했습니다. 위 Dice/IoU는 전체 픽셀 합산 기준입니다.
+
+## 딥러닝: DeepLabV3+
+
+### 모델 구성
+
+| 항목 | 값 |
+|---|---|
+| 모델 | FLAIR 1채널용 경량 인코더, ASPP, 1/4 해상도 특징을 결합하는 디코더 (사전학습 없음). [DeepLabV3+ 논문](https://arxiv.org/abs/1802.02611) |
+| 파라미터 수 | 943,697개 |
+
+### 전체 슬라이스로 학습 및 평가
+
+```bash
+python train.py --model deeplabv3plus --data ./kaggle_3m --lr 1e-4 --checkpoint results_deeplabv3plus/best.pt
+```
+
+### 저장된 가중치로 테스트만 실행
+
+```bash
+python train.py --model deeplabv3plus --test-only --data ./kaggle_3m --checkpoint results_deeplabv3plus/best.pt
+```
+
+### 종양이 있는 슬라이스만 사용
+
+```bash
+python train.py --model deeplabv3plus --tumor-only --data ./kaggle_3m --lr 1e-4 --checkpoint results_deeplabv3plus_tumor_only/best.pt
+python train.py --model deeplabv3plus --test-only --tumor-only --data ./kaggle_3m --checkpoint results_deeplabv3plus_tumor_only/best.pt
+```
+
+### 실험 결과
+
+| 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
+|---|---|---|---|---|
+| 배치 단위 Dice · lr 1e-4 | 0.7508 (18) | 0.6994 | 0.5378 | `results_deeplabv3plus/train_log.txt` |
+
+## 딥러닝 공통 설정
+
+### 학습 설정
+
+| 항목 | 값 |
+|---|---|
 | 입력 | FLAIR 1채널, 256×256, 환자별 p1~p99 정규화 (`dataset.py`) |
 | 손실 함수 | BCE + Soft Dice |
 | 옵티마이저 | Adam, 기본 lr 1e-3, 권장 1e-4 (`--lr`) |
@@ -138,49 +205,27 @@ python train.py --model unet --data ./kaggle_3m --lr 1e-4 --checkpoint results_u
 - 같은 `--checkpoint` 경로로 다시 실행하면 기존 가중치를 덮어씁니다. 실험마다 경로를 다르게 지정하세요.
 - 가중치 파일(`*.pt`)은 커밋하지 않습니다. 학습 로그만 결과 폴더에 `train_log.txt`로 올립니다.
 
+### 실행 옵션
+
+- `--data`로 MRI와 마스크가 있는 데이터셋 폴더를 지정합니다. 기본 분할 파일은 `splits/split.json`이며, `--split`으로 다른 파일을 지정할 수 있습니다.
+- `--test-only`는 저장된 가중치로 테스트 세트만 평가합니다. 가중치를 저장할 때 쓴 모델을 지정하세요. `--checkpoint`를 생략하면 `results_<model>/best.pt`를 사용합니다.
+- `--tumor-only`는 기존 환자 분할을 유지하며 정답에 종양이 있는 슬라이스만 선택합니다. 학습에서는 학습·검증·테스트 세트에, `--test-only`와 함께 쓰면 테스트 세트에 적용합니다.
+- 학습 로그를 파일로 남기려면 Windows PowerShell에서는 `| Tee-Object -FilePath train_log.txt`, macOS·Linux에서는 `| tee train_log.txt`를 붙입니다.
+
 ### 딥러닝 실행 결과
 
 실행마다 체크포인트 폴더 아래 `runs/run_*/`에 결과를 저장합니다.
 
 - `epoch_metrics.csv`에는 에폭별 학습 손실, 검증 Global Dice, 검증 Global IoU가 기록됩니다.
 - `summary.json`에는 데이터셋 경로와 분할별 환자·슬라이스 수, 학습 설정, 실행 환경, 테스트 Global Dice와 Global IoU가 저장됩니다.
-- `examples/`에는 테스트 세트의 처음 8장까지 입력 FLAIR, 정답, 예측, 오버레이를 나란히 저장합니다. 초록은 일치, 빨강은 과검출, 파랑은 미검출입니다.
+- `examples/tumor/`와 `examples/no_tumor/`에는 정답 마스크 기준으로 종양이 있는 슬라이스와 없는 슬라이스를 각각 최대 5장 저장합니다. 각 이미지에 입력 FLAIR, 정답, 예측, 오버레이를 나란히 표시합니다. 초록은 일치, 빨강은 과검출, 파랑은 미검출입니다.
 
-### 저장된 가중치로 테스트만 실행
+`--test-only`는 새 실행 폴더에 테스트 요약과 예시 이미지를 저장합니다.
 
-이미 학습한 `best.pt`가 있으면 `--test-only`로 재학습 없이 테스트 세트를 평가할 수 있습니다.
-
-```bash
-python train.py --test-only --model unet --checkpoint results_unet_batchdice_lr1e-4/best.pt --data ./kaggle_3m
-```
-
-`--model`은 가중치를 저장할 때 쓴 모델과 일치해야 합니다(`unet` 또는 `deeplabv3plus`). `--checkpoint`를 생략하면 `results_<model>/best.pt`를 사용합니다. 평가 분할의 기본값은 `splits/split.json`이며, 다른 분할을 사용했다면 `--split`으로 파일 경로를 지정합니다.
-
-테스트 Global Dice와 Global IoU는 터미널에 출력되며, `summary.json`과 `examples/`는 체크포인트 폴더 아래 새 `runs/run_*/`에 저장됩니다.
-
-학습 손실의 Soft Dice는 배치 전체 픽셀을 합산해 계산합니다. 검증과 테스트에서는 각 세트 전체의 픽셀을 합산해 Global Dice와 Global IoU를 계산합니다.
-
-### 1차 실험 결과 (RTX 4060, 20 epochs, batch 4)
-| 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
-|---|---|---|---|---|
-| 슬라이스 단위 Dice · lr 1e-3 | 0.468 (2) → 3~8·10에폭 0으로 붕괴(9에폭만 0.360), 10에폭에서 중단 | - | - | `results_unet/train_log_sample_dice.txt` |
-| 배치 단위 Dice · lr 1e-3 | 0.734 (9), 10·11·19에폭에 발산 | 0.661 | 0.493 | `results_unet_batchdice/train_log.txt` |
-| **배치 단위 Dice · lr 1e-4** | **0.844 (18)** | **0.797** | **0.663** | `results_unet_batchdice_lr1e-4/train_log.txt` |
-
-학습률은 검증 Dice로 선택했습니다. 위 Dice/IoU는 전체 픽셀 합산 기준입니다.
+학습 손실의 Soft Dice는 배치 전체 픽셀을 합산해 계산합니다.
 
 ### 평가 기준 주의
 딥러닝과 고전 기법 모두 검증·테스트 세트별로 예측과 정답의 종양 픽셀 수 및 교집합을 합산한 뒤 Global Dice와 Global IoU를 계산합니다. 딥러닝과 같은 평가 범위를 사용하려면 고전 기법을 기본 옵션으로 실행해 빈 슬라이스를 포함합니다. 저장소에 이미 있는 고전 기법의 `dice_mean`, `iou_mean` 결과는 이전 슬라이스 평균 방식으로 생성되었습니다.
-
-## 딥러닝: DeepLabv3+ 학습
-
-```bash
-python train.py --model deeplabv3plus --data ./kaggle_3m --lr 1e-4
-```
-
-FLAIR 1채널에 맞춘 경량 인코더를 사전학습 없이 사용합니다. ASPP로 여러 범위의 문맥을 추출하고, 디코더에서 입력 해상도의 1/4 크기인 저수준 특징과 결합해 원본 크기의 종양 분할 로짓을 출력합니다. [DeepLabv3+ 논문](https://arxiv.org/abs/1802.02611)
-
-U-Net과 같은 환자 분할·전처리·손실 함수·평가 코드를 사용합니다. 검증 Dice가 가장 높은 가중치는 기본적으로 `results_deeplabv3plus/best.pt`에 저장되며, 테스트 Dice와 IoU는 해당 가중치로 계산합니다.
 
 ## 주의
 - 뇌 영역은 밝기 기반으로 대략 추정하므로 두개골/잡음 등으로 오검출될 수 있습니다. 검증 실패 사례를 보고 개선하세요.

@@ -73,7 +73,8 @@ class LGGDataset(Dataset):
         if tumor_only:
             self.items = [s for s in self.items if s['has_tumor']]
         if not self.items:
-            raise ValueError(f"'{split}' 세트에 슬라이스가 없습니다.")
+            scope = '종양이 있는 ' if tumor_only else ''
+            raise ValueError(f"'{split}' 세트에 {scope}슬라이스가 없습니다.")
 
     def __len__(self):
         return len(self.items)
@@ -109,25 +110,27 @@ class LGGDataset(Dataset):
 # =====================================================================
 # DataLoader 묶음 (모델 담당은 이것만 호출)
 # =====================================================================
-def get_test_loader(batch_size, split_json, data_root, size=256, num_workers=2):
+def get_test_loader(batch_size, split_json, data_root, size=256, num_workers=2,
+                    *, tumor_only=False):
     if data_root is None:
         from data import get_data_path
         data_root = get_data_path()
-    test_ds = LGGDataset(split_json, data_root, 'test', size=size)
+    test_ds = LGGDataset(split_json, data_root, 'test', size=size, tumor_only=tumor_only)
     return DataLoader(test_ds, batch_size=batch_size, shuffle=False,
                       num_workers=num_workers, pin_memory=torch.cuda.is_available())
 
 
 def get_loaders(batch_size=16, split_json='splits/split.json', data_root=None,
-                size=256, augment=True, num_workers=2, seed=42):
+                size=256, augment=True, num_workers=2, seed=42, *, tumor_only=False):
     """train(증강 O, 섞기 O) / val / test(증강 X, 섞기 X) 로더를 반환한다."""
     if data_root is None:
         from data import get_data_path
         data_root = get_data_path()
 
     aug = Augment(seed=seed) if augment else None
-    train_ds = LGGDataset(split_json, data_root, 'train', size=size, augment=aug)
-    val_ds = LGGDataset(split_json, data_root, 'val', size=size)
+    train_ds = LGGDataset(split_json, data_root, 'train', size=size, augment=aug,
+                          tumor_only=tumor_only)
+    val_ds = LGGDataset(split_json, data_root, 'val', size=size, tumor_only=tumor_only)
 
     g = torch.Generator().manual_seed(seed)
     pin = torch.cuda.is_available()
@@ -135,7 +138,8 @@ def get_loaders(batch_size=16, split_json='splits/split.json', data_root=None,
                               num_workers=num_workers, pin_memory=pin, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
                             num_workers=num_workers, pin_memory=pin)
-    test_loader = get_test_loader(batch_size, split_json, data_root, size, num_workers)
+    test_loader = get_test_loader(batch_size, split_json, data_root, size, num_workers,
+                                  tumor_only=tumor_only)
     return train_loader, val_loader, test_loader
 
 

@@ -69,13 +69,14 @@ def segment_flair(image, patient, params, shared_norm):
     return segment(image, bounds['low'], bounds['high'], **params)
 
 
-def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
+def evaluate(pairs, params, shared_norm, save_dir=None, max_examples_per_group=5,
              *, read_image=read_flair, predict=segment_flair):
     rows = []
     total_intersection = total_foreground = 0
+    saved_examples = {'tumor': 0, 'no_tumor': 0}
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
-    for index, (image_path, mask_path, patient) in enumerate(pairs):
+    for image_path, mask_path, patient in pairs:
         image = read_image(image_path)
         gt = read_mask(mask_path)
         if image.shape != gt.shape:
@@ -84,12 +85,14 @@ def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
         pred = predict(image, patient, params, shared_norm)
         ms = (time.perf_counter() - start) * 1000
         intersection = np.count_nonzero(np.logical_and(pred, gt))
-        foreground = np.count_nonzero(pred) + np.count_nonzero(gt)
+        target_pixels = np.count_nonzero(gt)
+        foreground = np.count_nonzero(pred) + target_pixels
         total_intersection += intersection
         total_foreground += foreground
         rows.append({'image': str(image_path.name), 'patient': patient,
                      'ms': ms})
-        if save_dir is not None and index < max_examples:
+        group = 'tumor' if target_pixels else 'no_tumor'
+        if save_dir is not None and saved_examples[group] < max_examples_per_group:
             bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
             overlay = bgr.copy()
             # 초록색: 올바르게 검출한 영역, 빨간색: 잘못 검출한 영역, 파란색: 놓친 종양 영역.
@@ -106,11 +109,14 @@ def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
                 cv2.putText(header, title, (column * bgr.shape[1] + 8, 39),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
             panel = np.vstack((header, panel))
-            output_path = save_dir / f'{index:03d}_{image_path.stem}.png'
+            group_dir = save_dir / group
+            group_dir.mkdir(exist_ok=True)
+            output_path = group_dir / f'{saved_examples[group] + 1:02d}.png'
             ok, encoded = cv2.imencode('.png', panel)
             if not ok:
                 raise ValueError(f'Failed encoding {output_path}')
             encoded.tofile(output_path)
+            saved_examples[group] += 1
     return rows, metrics(total_intersection, total_foreground)
 
 

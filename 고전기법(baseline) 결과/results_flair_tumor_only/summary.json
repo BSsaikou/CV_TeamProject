@@ -23,5 +23,5 @@
   "test_patients": 17,
   "global_dice": 0.506327304514673,
   "global_iou": 0.33898142882645127,
-  "time_ms_mean": 2.0857525581362117
+  "time_ms_mean": 1.9149251162669443
 }
