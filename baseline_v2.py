@@ -58,15 +58,9 @@ def segment_roi(smooth, roi, threshold_method, percentile, kernel_size, min_area
     return cleaned
 
 
-def metrics(pred, gt):
-    p = pred.astype(bool)
-    g = gt.astype(bool)
-    intersection = int(np.logical_and(p, g).sum())
-    union = int(np.logical_or(p, g).sum())
-    ps, gs = int(p.sum()), int(g.sum())
-    # 예측과 정답이 모두 비어 있으면 정답으로 간주하고, 한쪽만 비어 있으면 불일치로 계산한다.
-    iou = intersection / union if union else 1.0
-    dice = 2 * intersection / (ps + gs) if (ps + gs) else 1.0
+def metrics(intersection, total):
+    dice = 2 * intersection / total if total else 1.0
+    iou = intersection / (total - intersection) if total else 1.0
     return dice, iou
 
 
@@ -78,6 +72,7 @@ def segment_flair(image, patient, params, shared_norm):
 def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
              *, read_image=read_flair, predict=segment_flair):
     rows = []
+    total_intersection = total_foreground = 0
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
     for index, (image_path, mask_path, patient) in enumerate(pairs):
@@ -88,7 +83,11 @@ def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
         start = time.perf_counter()
         pred = predict(image, patient, params, shared_norm)
         ms = (time.perf_counter() - start) * 1000
-        dice, iou = metrics(pred, gt)
+        intersection = np.count_nonzero(np.logical_and(pred, gt))
+        foreground = np.count_nonzero(pred) + np.count_nonzero(gt)
+        total_intersection += intersection
+        total_foreground += foreground
+        dice, iou = metrics(intersection, foreground)
         rows.append({'image': str(image_path.name), 'patient': patient,
                      'dice': dice, 'iou': iou, 'ms': ms})
         if save_dir is not None and index < max_examples:
@@ -113,7 +112,7 @@ def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
             if not ok:
                 raise ValueError(f'Failed encoding {output_path}')
             encoded.tofile(output_path)
-    return rows
+    return rows, metrics(total_intersection, total_foreground)
 
 
 def avg(rows, key):
@@ -195,21 +194,23 @@ def main(*, baseline=None):
     tuning = []
     # 최적의 파라미터를 검증을 통해 선택한다.
     for index, params in enumerate(candidates, start=1):
-        rows = evaluate(splits['val'], params, shared_norm=shared_norm, **evaluation_options)
-        score = avg(rows, 'dice')
-        print(f'[{index}/{len(candidates)}] val Dice: {score:.4f}; params: {params}', flush=True)
-        tuning.append({'params': params, 'val_dice': score, 'val_iou': avg(rows, 'iou')})
+        _, (score, iou) = evaluate(splits['val'], params, shared_norm=shared_norm,
+                                   **evaluation_options)
+        print(f'[{index}/{len(candidates)}] val Global Dice: {score:.4f} | '
+              f'val Global IoU: {iou:.4f} | params: {params}', flush=True)
+        tuning.append({'params': params, 'val_global_dice': score, 'val_global_iou': iou})
         if score > best_score:
             best_score, best_params = score, params
     # 검증한 파라미터와 성능을 저장한다.
     (args.out / 'validation_tuning.json').write_text(json.dumps(tuning, indent=2), encoding='utf-8')
     # 최적의 파라미터를 저장한다.
     (args.out / 'best_params.json').write_text(json.dumps(best_params, indent=2), encoding='utf-8')
-    print(f'Best validation Dice: {best_score:.4f}; params: {best_params}')
+    print(f'Best validation Global Dice: {best_score:.4f} | params: {best_params}')
 
     # 최적 파라미터를 확정한 뒤, 별도로 보관한 테스트 세트에서 한 번 평가한다.
-    rows = evaluate(splits['test'], best_params, save_dir=args.out / 'examples',
-                    shared_norm=shared_norm, **evaluation_options)
+    rows, (global_dice, global_iou) = evaluate(
+        splits['test'], best_params, save_dir=args.out / 'examples',
+        shared_norm=shared_norm, **evaluation_options)
     with (args.out / 'test_metrics.csv').open('w', newline='', encoding='utf-8-sig') as f:
         writer = csv.DictWriter(f, fieldnames=['image', 'patient', 'dice', 'iou', 'ms'])
         writer.writeheader()
@@ -224,9 +225,9 @@ def main(*, baseline=None):
               'timing_scope': ('ROI + segmentation (excludes image reading and grayscale conversion)'
                                if baseline else 'ROI + normalization + segmentation (excludes image reading)'),
               'original_split_counts': original_counts,
-              'validation_slices': len(splits['val']), 'best_validation_dice': best_score,
+              'validation_slices': len(splits['val']), 'best_validation_global_dice': best_score,
               'test_slices': len(rows), 'test_patients': len(set(row['patient'] for row in rows)),
-              'dice_mean': avg(rows, 'dice'), 'iou_mean': avg(rows, 'iou'),
+              'global_dice': global_dice, 'global_iou': global_iou,
               'time_ms_mean': avg(rows, 'ms')}
     (args.out / 'summary.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report, ensure_ascii=False, indent=2))

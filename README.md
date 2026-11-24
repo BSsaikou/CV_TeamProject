@@ -100,20 +100,20 @@ python baseline_v2.py --tumor-only --out results_flair_tumor_only
 환자 단위 분할 후 정답 마스크가 비어 있지 않은 검증·테스트 슬라이스만 사용합니다.
 학습 세트는 유지하며, `evaluation_manifest.json`에는 실제 사용한 목록을 저장합니다.
 
-개선 전 방식에 ROI 침식을 추가하려면 `--erosion`을 붙입니다. 이 옵션을 사용하면 검증 Dice로 9×9, 15×15, 21×21 커널 중 하나를 선택합니다. 기본 실행의 침식 커널은 0입니다.
+개선 전 방식에 ROI 침식을 추가하려면 `--erosion`을 붙입니다. 이 옵션을 사용하면 검증 Global Dice로 9×9, 15×15, 21×21 커널 중 하나를 선택합니다. 기본 실행의 침식 커널은 0입니다.
 
 ```bash
 python baseline.py --tumor-only --erosion --out results_before_preprocess_tumor_only_erosion
 ```
 
-`baseline_v2.py`는 항상 ROI 침식을 적용합니다. 9×9, 15×15, 21×21 커널을 포함한 60개 조합을 검증 Dice로 비교하고, 가장 높은 점수를 얻은 설정으로 테스트합니다.
+`baseline_v2.py`는 항상 ROI 침식을 적용합니다. 9×9, 15×15, 21×21 커널을 포함한 60개 조합을 검증 Global Dice로 비교하고, 가장 높은 점수를 얻은 설정으로 테스트합니다.
 
 ## 고전 기법 결과 파일
 - `evaluation_manifest.json`: 공용 분할에서 이번 실행에 사용한 영상 목록. 입력 파일인 `splits/split.json`과 구분하여 저장합니다.
-- `validation_tuning.json`: 검증 세트에서만 파라미터 탐색한 결과
+- `validation_tuning.json`: 파라미터 조합별 검증 Global Dice와 Global IoU
 - `best_params.json`: 검증 성능으로 정한 최종 설정
 - `test_metrics.csv`: 테스트 이미지별 Dice/IoU/추론시간(ms)
-- `summary.json`: 테스트 평균값
+- `summary.json`: 테스트 Global Dice, Global IoU 및 평균 추론시간
 - `examples/`: 원본 / 정답 / 예측 / 오버레이 (초록=일치, 빨강=과검출, 파랑=미검출)
 
 ## 딥러닝: U-Net 학습
@@ -152,10 +152,10 @@ python train.py --model unet --data ./kaggle_3m --checkpoint results_unet/best.p
 | 배치 단위 Dice · lr 1e-3 | 0.734 (9), 10·11·19에폭에 발산 | 0.661 | 0.493 | `results_unet_batchdice/train_log.txt` |
 | **배치 단위 Dice · lr 1e-4** | **0.844 (18)** | **0.797** | **0.663** | `results_unet_batchdice_lr1e-4/train_log.txt` |
 
-학습률은 검증 Dice로 선택했습니다(테스트 점수로 고르지 않음). 위 Dice/IoU는 아래 "평가 기준 주의"의 전체 픽셀 합산 기준입니다.
+학습률은 검증 Dice로 선택했습니다. 위 Dice/IoU는 전체 픽셀 합산 기준입니다.
 
 ### 평가 기준 주의
-현재 `train.py`의 검증·테스트 Dice/IoU는 빈 슬라이스를 포함한 전체 픽셀을 합산해 계산합니다. 고전 기법 결과(종양 있는 슬라이스별 평균)와 기준이 다르므로 그대로 비교하지 않습니다. 계획서 기준(종양 있는 슬라이스별 평균 Dice·IoU + 빈 슬라이스 오검출 비율)으로 통일할 예정입니다.
+딥러닝과 고전 기법 모두 검증·테스트 세트별로 예측과 정답의 종양 픽셀 수 및 교집합을 합산한 뒤 Global Dice와 Global IoU를 계산합니다. 딥러닝과 같은 평가 범위를 사용하려면 고전 기법을 기본 옵션으로 실행해 빈 슬라이스를 포함합니다. 저장소에 이미 있는 고전 기법의 `dice_mean`, `iou_mean` 결과는 이전 슬라이스 평균 방식으로 생성되었습니다.
 
 ## 딥러닝: DeepLabv3+ 학습
 

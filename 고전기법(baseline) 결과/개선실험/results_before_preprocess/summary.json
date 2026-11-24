@@ -1,0 +1,27 @@
+{
+  "method": "histogram threshold + morphology",
+  "params": {
+    "threshold_method": "percentile",
+    "percentile": 90,
+    "kernel_size": 5,
+    "min_area": 50,
+    "erosion_kernel_size": 0
+  },
+  "evaluation_scope": "all slices",
+  "preprocessing": "BGR-to-grayscale + legacy foreground ROI, no erosion",
+  "seed": 42,
+  "split_file": "C:\\Users\\qjatn\\OneDrive\\\ubc14\ud0d5 \ud654\uba74\\test\\CV_TeamProject\\splits\\split.json",
+  "timing_scope": "ROI + segmentation (excludes image reading and grayscale conversion)",
+  "original_split_counts": {
+    "train": 2714,
+    "val": 615,
+    "test": 600
+  },
+  "validation_slices": 615,
+  "best_validation_global_dice": 0.10101303520631008,
+  "test_slices": 600,
+  "test_patients": 17,
+  "global_dice": 0.08036402076879212,
+  "global_iou": 0.041864198024136316,
+  "time_ms_mean": 1.4627471666665315
+}

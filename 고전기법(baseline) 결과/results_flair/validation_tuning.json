@@ -1,0 +1,662 @@
+[
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.12002573645563738,
+    "val_global_iou": 0.06384435084198964
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.1240908606630749,
+    "val_global_iou": 0.06614971805454134
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.12842814948768375,
+    "val_global_iou": 0.06862047505818618
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.12093897935654686,
+    "val_global_iou": 0.06436139009212874
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.12507675445403457,
+    "val_global_iou": 0.06671033321026058
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.12934250049701082,
+    "val_global_iou": 0.06914280167875494
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.12566857601643144,
+    "val_global_iou": 0.06704714780342558
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.1288784676846404,
+    "val_global_iou": 0.0688776573081086
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.13225657555276332,
+    "val_global_iou": 0.0708108907367215
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.12635887061599366,
+    "val_global_iou": 0.06744027371855166
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.12948803831104896,
+    "val_global_iou": 0.0692259878381797
+  },
+  {
+    "params": {
+      "threshold_method": "otsu",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.13280989330652182,
+    "val_global_iou": 0.07112821176077716
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.18946831118768898,
+    "val_global_iou": 0.10464788457360727
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.2866668627739373,
+    "val_global_iou": 0.16731530870759875
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.34459422969844933,
+    "val_global_iou": 0.20816299899430557
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.19382669992009047,
+    "val_global_iou": 0.10731345652796168
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.29786463227657156,
+    "val_global_iou": 0.17499467899251717
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.35963563201006704,
+    "val_global_iou": 0.21924130944806902
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.22070710385107842,
+    "val_global_iou": 0.12404203058910312
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.33275988546476043,
+    "val_global_iou": 0.1995872595457078
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.3922725123627313,
+    "val_global_iou": 0.24399191739840104
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.22476258186084955,
+    "val_global_iou": 0.12660987176377314
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.3414025485358726,
+    "val_global_iou": 0.2058381002783402
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 90,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.40349645878001444,
+    "val_global_iou": 0.2527375908428479
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.08627960784814234,
+    "val_global_iou": 0.045084751253095225
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.1860440067121196,
+    "val_global_iou": 0.10256258001877218
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.257190061465464,
+    "val_global_iou": 0.14757206496178554
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.08688739577742596,
+    "val_global_iou": 0.04541677033837438
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.19032477130188152,
+    "val_global_iou": 0.10517067829833825
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.2657257886394012,
+    "val_global_iou": 0.15322016950879414
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.10216571113343972,
+    "val_global_iou": 0.05383278810630824
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.20393411710926673,
+    "val_global_iou": 0.1135448977968663
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.27492059343136727,
+    "val_global_iou": 0.15936692095711336
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.10361441458073714,
+    "val_global_iou": 0.05463784125833751
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.20586727273623648,
+    "val_global_iou": 0.1147447285297589
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 95,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.2779413397170754,
+    "val_global_iou": 0.1614006224801954
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.042663181016309504,
+    "val_global_iou": 0.021796545491062462
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.10511929204865293,
+    "val_global_iou": 0.05547541415538649
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.1658451499560798,
+    "val_global_iou": 0.09042047346880691
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.04267767530621487,
+    "val_global_iou": 0.021804112060537405
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.101604902556644,
+    "val_global_iou": 0.05352147331895208
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.16534253971715904,
+    "val_global_iou": 0.09012174931644674
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.04861661908310818,
+    "val_global_iou": 0.024913924940912845
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.10278631871872057,
+    "val_global_iou": 0.054177512914256466
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.15532088651938944,
+    "val_global_iou": 0.08419940648990387
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.04906968349955252,
+    "val_global_iou": 0.025151940632904334
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.09931673599022363,
+    "val_global_iou": 0.052253175408458155
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 97,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.1507604767397155,
+    "val_global_iou": 0.08152566222136473
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.02332090512645149,
+    "val_global_iou": 0.01179802284899632
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.06208503220512942,
+    "val_global_iou": 0.032037025997985455
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 3,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.10883662129965654,
+    "val_global_iou": 0.057550089286549054
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.022719986488113762,
+    "val_global_iou": 0.011490525536522439
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.05729912954558366,
+    "val_global_iou": 0.0294945714067554
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 3,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.1027528834194991,
+    "val_global_iou": 0.0541589350810007
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.023256435521835428,
+    "val_global_iou": 0.011765024022210404
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.05441509960576353,
+    "val_global_iou": 0.027968504275879876
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 5,
+      "min_area": 15,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.09303589849217216,
+    "val_global_iou": 0.0487874409479492
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 9
+    },
+    "val_global_dice": 0.022567134403503566,
+    "val_global_iou": 0.011412339096880615
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 15
+    },
+    "val_global_dice": 0.050564712027275034,
+    "val_global_iou": 0.02593813312975306
+  },
+  {
+    "params": {
+      "threshold_method": "percentile",
+      "percentile": 98,
+      "kernel_size": 5,
+      "min_area": 50,
+      "erosion_kernel_size": 21
+    },
+    "val_global_dice": 0.08611014257438795,
+    "val_global_iou": 0.04499221428040555
+  }
+]
