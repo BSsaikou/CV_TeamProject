@@ -112,17 +112,14 @@ python baseline.py --tumor-only --erosion --out results_before_preprocess_tumor_
 - `evaluation_manifest.json`: 공용 분할에서 이번 실행에 사용한 영상 목록. 입력 파일인 `splits/split.json`과 구분하여 저장합니다.
 - `validation_tuning.json`: 파라미터 조합별 검증 Global Dice와 Global IoU
 - `best_params.json`: 검증 성능으로 정한 최종 설정
-- `test_metrics.csv`: 테스트 이미지별 Dice/IoU/추론시간(ms)
+- `test_metrics.csv`: 테스트 이미지별 추론시간(ms)
 - `summary.json`: 테스트 Global Dice, Global IoU 및 평균 추론시간
 - `examples/`: 원본 / 정답 / 예측 / 오버레이 (초록=일치, 빨강=과검출, 파랑=미검출)
 
 ## 딥러닝: U-Net 학습
 ```bash
 # 권장: 배치 단위 Dice 손실 + 학습률 1e-4
-python train.py --model unet --data ./kaggle_3m --dice-mode batch --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
-
-# 기존 방식 (슬라이스 단위 Dice 손실, 기본값)
-python train.py --model unet --data ./kaggle_3m --checkpoint results_unet/best.pt
+python train.py --model unet --data ./kaggle_3m --lr 1e-4 --checkpoint results_unet_batchdice_lr1e-4/best.pt
 ```
 학습 로그를 파일로 남기려면 Windows PowerShell에서는 `| Tee-Object -FilePath train_log.txt`, macOS·Linux에서는 `| tee train_log.txt`를 붙입니다.
 
@@ -141,9 +138,27 @@ python train.py --model unet --data ./kaggle_3m --checkpoint results_unet/best.p
 - 같은 `--checkpoint` 경로로 다시 실행하면 기존 가중치를 덮어씁니다. 실험마다 경로를 다르게 지정하세요.
 - 가중치 파일(`*.pt`)은 커밋하지 않습니다. 학습 로그만 결과 폴더에 `train_log.txt`로 올립니다.
 
-### `--dice-mode` (Dice 손실 계산 단위)
-- `sample` (기본값): 슬라이스마다 Dice를 계산해 평균합니다. 종양 없는 슬라이스(약 2/3)는 아무것도 예측하지 않으면 Dice가 1이 되어 손실이 0이 됩니다. 이 때문에 1차 학습에서 3에폭부터 모델이 전부 배경으로 예측하고 검증 Dice가 0이 되는 붕괴가 발생했습니다(학습 손실이 '전부 배경' 예측의 손실값인 약 0.47에서 정체).
-- `batch`: 배치 전체 픽셀을 합쳐 Dice를 한 번 계산합니다. 빈 슬라이스가 빈 예측에 보상을 주지 않아 붕괴가 일어나지 않습니다.
+### 딥러닝 실행 결과
+
+실행마다 체크포인트 폴더 아래 `runs/run_*/`에 결과를 저장합니다.
+
+- `epoch_metrics.csv`에는 에폭별 학습 손실, 검증 Global Dice, 검증 Global IoU가 기록됩니다.
+- `summary.json`에는 데이터셋 경로와 분할별 환자·슬라이스 수, 학습 설정, 실행 환경, 테스트 Global Dice와 Global IoU가 저장됩니다.
+- `examples/`에는 테스트 세트의 처음 8장까지 입력 FLAIR, 정답, 예측, 오버레이를 나란히 저장합니다. 초록은 일치, 빨강은 과검출, 파랑은 미검출입니다.
+
+### 저장된 가중치로 테스트만 실행
+
+이미 학습한 `best.pt`가 있으면 `--test-only`로 재학습 없이 테스트 세트를 평가할 수 있습니다.
+
+```bash
+python train.py --test-only --model unet --checkpoint results_unet_batchdice_lr1e-4/best.pt --data ./kaggle_3m
+```
+
+`--model`은 가중치를 저장할 때 쓴 모델과 일치해야 합니다(`unet` 또는 `deeplabv3plus`). `--checkpoint`를 생략하면 `results_<model>/best.pt`를 사용합니다. 평가 분할의 기본값은 `splits/split.json`이며, 다른 분할을 사용했다면 `--split`으로 파일 경로를 지정합니다.
+
+테스트 Global Dice와 Global IoU는 터미널에 출력되며, `summary.json`과 `examples/`는 체크포인트 폴더 아래 새 `runs/run_*/`에 저장됩니다.
+
+학습 손실의 Soft Dice는 배치 전체 픽셀을 합산해 계산합니다. 검증과 테스트에서는 각 세트 전체의 픽셀을 합산해 Global Dice와 Global IoU를 계산합니다.
 
 ### 1차 실험 결과 (RTX 4060, 20 epochs, batch 4)
 | 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
@@ -160,7 +175,7 @@ python train.py --model unet --data ./kaggle_3m --checkpoint results_unet/best.p
 ## 딥러닝: DeepLabv3+ 학습
 
 ```bash
-python train.py --model deeplabv3plus --data ./kaggle_3m --dice-mode batch --lr 1e-4
+python train.py --model deeplabv3plus --data ./kaggle_3m --lr 1e-4
 ```
 
 FLAIR 1채널에 맞춘 경량 인코더를 사전학습 없이 사용합니다. ASPP로 여러 범위의 문맥을 추출하고, 디코더에서 입력 해상도의 1/4 크기인 저수준 특징과 결합해 원본 크기의 종양 분할 로짓을 출력합니다. [DeepLabv3+ 논문](https://arxiv.org/abs/1802.02611)

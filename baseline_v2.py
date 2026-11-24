@@ -87,9 +87,8 @@ def evaluate(pairs, params, shared_norm, save_dir=None, max_examples=8,
         foreground = np.count_nonzero(pred) + np.count_nonzero(gt)
         total_intersection += intersection
         total_foreground += foreground
-        dice, iou = metrics(intersection, foreground)
         rows.append({'image': str(image_path.name), 'patient': patient,
-                     'dice': dice, 'iou': iou, 'ms': ms})
+                     'ms': ms})
         if save_dir is not None and index < max_examples:
             bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
             overlay = bgr.copy()
@@ -212,7 +211,7 @@ def main(*, baseline=None):
         splits['test'], best_params, save_dir=args.out / 'examples',
         shared_norm=shared_norm, **evaluation_options)
     with (args.out / 'test_metrics.csv').open('w', newline='', encoding='utf-8-sig') as f:
-        writer = csv.DictWriter(f, fieldnames=['image', 'patient', 'dice', 'iou', 'ms'])
+        writer = csv.DictWriter(f, fieldnames=['image', 'patient', 'ms'])
         writer.writeheader()
         writer.writerows(rows)
     report = {'method': 'histogram threshold + morphology', 'params': best_params,
