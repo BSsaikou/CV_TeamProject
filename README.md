@@ -18,7 +18,7 @@ https://app.notion.com/p/41b9e7d5dcd880dbbf8beb0c273160ed?source=copy_link
 | `train.py` | U-Net 및 DeepLabv3+ 공용 학습·검증·테스트 (`get_loaders()` 사용) |
 | `unet.py` | FLAIR 1채널용 2D U-Net 모델 |
 | `deeplabv3plus.py` | FLAIR 1채널용 DeepLabv3+ 모델 |
-| `U-Net.py` | 기존 실행 명령을 `train.py`로 연결 |
+
 
 ## 설치
 가상환경 사용을 권장합니다.
