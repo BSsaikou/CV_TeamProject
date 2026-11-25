@@ -152,8 +152,10 @@ RTX 4060, 최대 20에폭, 배치 크기 4로 실행했습니다.
 | 슬라이스 단위 Dice · lr 1e-3 | 0.468 (2) → 3~8·10에폭 0으로 붕괴(9에폭만 0.360), 10에폭에서 중단 | - | - | `results_unet/train_log_sample_dice.txt` |
 | 배치 단위 Dice · lr 1e-3 | 0.734 (9), 10·11·19에폭에 발산 | 0.661 | 0.493 | `results_unet_batchdice/train_log.txt` |
 | **배치 단위 Dice · lr 1e-4** | **0.844 (18)** | **0.797** | **0.663** | `results_unet_batchdice_lr1e-4/train_log.txt` |
+| 종양 슬라이스만 · 배치 단위 Dice · lr 1e-4 | 0.848 (15) | 0.867 | 0.765 | `results_unet_tumor_only/runs/run_0z51yogq/` |
 
-학습률은 검증 Dice로 선택했습니다. 위 Dice/IoU는 전체 픽셀 합산 기준입니다.
+학습률은 검증 Dice로 선택했습니다. 위 Dice/IoU는 전체 픽셀 합산(Global) 기준입니다.
+전체 슬라이스 모델(lr 1e-4)의 테스트 예측 그림은 `--test-only`로 다시 평가해 `results_unet_batchdice_lr1e-4/runs/run_a0ks4fjm/`에 저장했습니다(Test Dice 0.797로 동일하게 재현).
 
 ## 딥러닝: DeepLabV3+
 
@@ -188,6 +190,27 @@ python train.py --model deeplabv3plus --test-only --tumor-only --data ./kaggle_3
 | 실험 | 최고 검증 Dice (에폭) | Test Dice | Test IoU | 로그 |
 |---|---|---|---|---|
 | 배치 단위 Dice · lr 1e-4 | 0.7508 (18) | 0.6994 | 0.5378 | `results_deeplabv3plus/train_log.txt` |
+| 종양 슬라이스만 · 배치 단위 Dice · lr 1e-4 | 0.8140 (20) | 0.7774 | 0.6359 | `results_deeplabv3plus_tumor_only/runs/run_a2ib9co6/` |
+
+전체 슬라이스 모델의 테스트 예측 그림은 `--test-only`로 다시 평가해 `results_deeplabv3plus/runs/run_3kxvkr5r/`에 저장했습니다(Test Dice 0.6994로 동일하게 재현).
+
+## 실험 1·2 최종 비교 (테스트 세트, Global Dice / IoU)
+
+중간 점검 피드백에 따라 데이터 구성을 두 가지로 나눠 비교했습니다.
+- **실험 1:** 학습·검증·테스트 모두 종양이 있는 슬라이스만 사용 (테스트 215장)
+- **실험 2:** 학습·검증·테스트 모두 전체 슬라이스 사용 (테스트 600장)
+
+| 방법 | 파라미터 수 | 실험 1: 종양 슬라이스만 | 실험 2: 전체 슬라이스 | 실험 1 → 2 Dice 변화 |
+|---|---|---|---|---|
+| 고전 기법 (`baseline_v2.py`) | 학습 없음 | 0.506 / 0.339 | 0.330 / 0.198 | −0.176 |
+| U-Net | 7,762,465 | **0.867 / 0.765** | **0.797 / 0.663** | −0.070 |
+| DeepLabV3+ | 943,697 | 0.777 / 0.636 | 0.699 / 0.538 | −0.078 |
+
+- 고전 기법 값은 `고전기법(baseline) 결과/results_flair_tumor_only`(실험 1)와 `고전기법(baseline) 결과/results_flair`(실험 2)의 `summary.json`입니다.
+- 두 실험 모두 U-Net > DeepLabV3+ > 고전 기법 순서입니다.
+- 종양이 없는 슬라이스가 섞이면(실험 2) 고전 기법의 Dice가 가장 크게 떨어집니다. 밝기 임계값이 종양이 없는 슬라이스에서도 밝은 정상 조직을 검출하는 것으로 보입니다.
+- DeepLabV3+는 전체 슬라이스 학습에서 검증 Dice가 두 차례 0 근처로 급락했지만, 종양 슬라이스만 학습할 때는 급락 없이 수렴했습니다.
+- 실험 1은 '종양이 있다고 가정한' 분할 성능이므로, 실제 사용 상황(종양 유무를 모르는 경우)은 실험 2로 판단해야 합니다.
 
 ## 딥러닝 공통 설정
 
@@ -232,4 +255,3 @@ python train.py --model deeplabv3plus --test-only --tumor-only --data ./kaggle_3
 - `baseline_v2.py`와 딥러닝은 FLAIR 채널과 환자별 정규화 값을 공유합니다. `baseline_v2.py`는 Otsu 입력을 위해 정규화 값을 8비트로 변환하고 공통 ROI를 사용합니다.
 - 데이터셋 원본, 모델 가중치(`*.pth`, `*.pt`)는 커밋하지 않습니다.
 - 실제 의료 진단용이 아닙니다.
-
